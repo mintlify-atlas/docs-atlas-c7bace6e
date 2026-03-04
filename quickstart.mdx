@@ -47,9 +47,7 @@ tags.images[0]; // Cover art
 tags.raw['TBPM']; // Custom tags
 ```
 
-<Info>
-Check out the [Metadata extraction example](/examples/metadata-extraction) to see this code in action.
-</Info>
+
 
 ## Create new media files
 
@@ -108,9 +106,8 @@ const buffer = output.target.buffer; // ArrayBuffer containing the final MP4 fil
 ```
 
 <Info>
-- Check out the [Procedural generation example](/examples/procedural-generation) for a demo of in-browser video generation
-- You can create files of many different formats - see [Output formats](/guide/output-formats)
-- Media data can be added from different sources - see [Media sources](/guide/media-sources)
+- You can create files of many different formats - see [Output formats](/api/output-formats)
+- Media data can be added from different sources - see [Media sources](/advanced/media-sources)
 </Info>
 
 ## Convert files
@@ -207,7 +204,7 @@ This code will automatically **transmux** (copy media data) when possible, and *
     }
     ```
 
-    See [Media sinks](/guide/media-sinks) for all the ways to extract media data from tracks.
+    See [Media sinks](/advanced/media-sinks) for all the ways to extract media data from tracks.
   </Step>
 
   <Step title="Extract video thumbnails">
@@ -255,7 +252,7 @@ This code will automatically **transmux** (copy media data) when possible, and *
     }
     ```
 
-    Check out the [Thumbnail generation example](/examples/thumbnail-generation) to see this in action.
+
   </Step>
 
   <Step title="Compress media files">
@@ -307,7 +304,7 @@ This code will automatically **transmux** (copy media data) when possible, and *
     await conversion.execute();
     ```
 
-    See the [File compression example](/examples/file-compression) for a complete demo.
+
   </Step>
 
   <Step title="Record live media">
@@ -359,7 +356,7 @@ This code will automatically **transmux** (copy media data) when possible, and *
     await output.finalize();
     ```
 
-    Check out the [Live recording demo](/examples/live-recording) to see this in action.
+
   </Step>
 </Steps>
 
@@ -368,16 +365,16 @@ This code will automatically **transmux** (copy media data) when possible, and *
 Now that you've seen the basics, dive deeper into specific topics:
 
 <CardGroup cols={2}>
-  <Card title="Reading media files" icon="book-open" href="/guide/reading-media-files">
+  <Card title="Reading media files" icon="book-open" href="/guides/reading-files">
     Learn about input sources, demuxers, and extracting data
   </Card>
-  <Card title="Writing media files" icon="pen" href="/guide/writing-media-files">
+  <Card title="Writing media files" icon="pen" href="/guides/writing-files">
     Understand output targets, muxers, and media sources
   </Card>
-  <Card title="Converting media files" icon="arrows-rotate" href="/guide/converting-media-files">
+  <Card title="Converting media files" icon="arrows-rotate" href="/guides/converting-files">
     Master transmuxing, transcoding, and conversion options
   </Card>
-  <Card title="Supported formats" icon="list" href="/guide/supported-formats-and-codecs">
+  <Card title="Supported formats" icon="list" href="/concepts/formats-and-codecs">
     See the full list of container formats and codecs
   </Card>
 </CardGroup>

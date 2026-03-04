@@ -5,7 +5,7 @@ description: Enable AC-3 and E-AC-3 decoding and encoding with the @mediabunny/a
 
 ## What is @mediabunny/ac3?
 
-`@mediabunny/ac3` is an extension package that adds AC-3 (Dolby Digital) and E-AC-3 (Dolby Digital Plus) support to Mediabunny. Browsers have no support for these codecs in their WebCodecs implementations. This package provides both a decoder and encoder, implemented using Mediabunny's [custom coder API](/guide/supported-formats-and-codecs#custom-coders).
+`@mediabunny/ac3` is an extension package that adds AC-3 (Dolby Digital) and E-AC-3 (Dolby Digital Plus) support to Mediabunny. Browsers have no support for these codecs in their WebCodecs implementations. This package provides both a decoder and encoder, implemented using Mediabunny's [custom coder API](/concepts/formats-and-codecs#custom-coders).
 
 Under the hood, it uses a fast, size-optimized WASM build of [FFmpeg](https://ffmpeg.org/)'s AC-3 and E-AC-3 coders.
 
@@ -187,4 +187,4 @@ The decoder:
 The WASM build is highly optimized for size and performance, using FFmpeg with only AC-3 and E-AC-3 codecs enabled. This keeps the bundle size minimal while providing full codec support.
 </Info>
 
-For more ways of using Mediabunny, refer to the [guide](/guide/introduction).
+For more ways of using Mediabunny, refer to the [guide](/introduction).

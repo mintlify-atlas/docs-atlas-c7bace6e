@@ -259,6 +259,24 @@ function canEncodeAudio(
 
 **Source:** encode.ts:585
 
+### canEncodeSubtitles
+
+Checks if the browser is able to encode the given subtitle codec.
+
+```typescript
+function canEncodeSubtitles(codec: SubtitleCodec): Promise<boolean>
+```
+
+<ParamField path="codec" type="SubtitleCodec" required>
+  The subtitle codec to check.
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  A promise that resolves to `true` if the subtitle codec can be encoded.
+</ResponseField>
+
+**Source:** encode.ts:656
+
 ### getEncodableCodecs
 
 Returns the list of all media codecs that can be encoded by the browser.
@@ -331,6 +349,26 @@ function getEncodableAudioCodecs(
 
 **Source:** encode.ts:701
 
+### getEncodableSubtitleCodecs
+
+Returns the list of all subtitle codecs that can be encoded by the browser.
+
+```typescript
+function getEncodableSubtitleCodecs(
+  checkedCodecs?: SubtitleCodec[]
+): Promise<SubtitleCodec[]>
+```
+
+<ParamField path="checkedCodecs" type="SubtitleCodec[]" default="SUBTITLE_CODECS">
+  Array of codecs to check. Defaults to all subtitle codecs.
+</ParamField>
+
+<ResponseField name="return" type="Promise<SubtitleCodec[]>">
+  Array of encodable subtitle codecs from the checked list.
+</ResponseField>
+
+**Source:** encode.ts:718
+
 ### getFirstEncodableVideoCodec
 
 Returns the first video codec from the given list that can be encoded by the browser.
@@ -372,6 +410,26 @@ function getFirstEncodableAudioCodec(
 </ResponseField>
 
 **Source:** encode.ts:752
+
+### getFirstEncodableSubtitleCodec
+
+Returns the first subtitle codec from the given list that can be encoded by the browser.
+
+```typescript
+function getFirstEncodableSubtitleCodec(
+  checkedCodecs: SubtitleCodec[]
+): Promise<SubtitleCodec | null>
+```
+
+<ParamField path="checkedCodecs" type="SubtitleCodec[]" required>
+  Array of subtitle codecs to check.
+</ParamField>
+
+<ResponseField name="return" type="Promise<SubtitleCodec | null>">
+  The first encodable codec from the list, or `null` if none are encodable.
+</ResponseField>
+
+**Source:** encode.ts:774
 
 ## Usage examples
 
