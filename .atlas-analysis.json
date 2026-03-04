@@ -1,0 +1,161 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Mediabunny",
+  "projectDescription": "Pure TypeScript media toolkit for reading, writing, and converting video and audio files, directly in the browser.",
+  "theme": "palm",
+  "primaryColor": "#FF6B9D",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/input-output",
+              "concepts/formats-and-codecs",
+              "concepts/packets-and-samples",
+              "concepts/sources-and-targets"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/reading-files",
+              "guides/writing-files",
+              "guides/converting-files",
+              "guides/metadata",
+              "guides/streaming"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/media-sources",
+              "advanced/media-sinks",
+              "advanced/custom-coders",
+              "advanced/performance"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "extensions/mp3-encoder",
+              "extensions/ac3"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Input/Output",
+            "pages": [
+              "api/input",
+              "api/output",
+              "api/input-track",
+              "api/conversion"
+            ]
+          },
+          {
+            "group": "Formats",
+            "pages": [
+              "api/input-formats",
+              "api/output-formats"
+            ]
+          },
+          {
+            "group": "Sources & Targets",
+            "pages": [
+              "api/sources",
+              "api/targets"
+            ]
+          },
+          {
+            "group": "Media Sources",
+            "pages": [
+              "api/media-sources/video-sources",
+              "api/media-sources/audio-sources",
+              "api/media-sources/subtitle-sources"
+            ]
+          },
+          {
+            "group": "Media Sinks",
+            "pages": [
+              "api/media-sinks/video-sinks",
+              "api/media-sinks/audio-sinks"
+            ]
+          },
+          {
+            "group": "Data Types",
+            "pages": [
+              "api/packets",
+              "api/samples",
+              "api/metadata"
+            ]
+          },
+          {
+            "group": "Encoding",
+            "pages": [
+              "api/codecs",
+              "api/encoding",
+              "api/custom-coders"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Read and write MP4, MOV, WebM, MKV, WAVE, MP3, Ogg, ADTS, FLAC, MPEG-TS",
+    "Hardware-accelerated encoding & decoding with WebCodecs API",
+    "25+ video, audio, and subtitle codecs support",
+    "High-precision microsecond-accurate operations",
+    "Transmuxing, transcoding, resizing, rotation, cropping, trimming",
+    "Streaming I/O for files of any size",
+    "Tree-shakable with zero dependencies",
+    "Cross-platform (browser and Node.js)"
+  ],
+  "publicApiSurface": [
+    "Input",
+    "Output",
+    "Conversion",
+    "InputFormat",
+    "OutputFormat",
+    "Source (BlobSource, BufferSource, FilePathSource, StreamSource, UrlSource)",
+    "Target (BufferTarget, FilePathTarget, StreamTarget, NullTarget)",
+    "MediaSource (CanvasSource, AudioBufferSource, VideoSampleSource, AudioSampleSource, EncodedVideoPacketSource, EncodedAudioPacketSource, MediaStreamVideoTrackSource, MediaStreamAudioTrackSource, TextSubtitleSource)",
+    "MediaSink (CanvasSink, AudioBufferSink, VideoSampleSink, AudioSampleSink, EncodedPacketSink)",
+    "VideoSample",
+    "AudioSample",
+    "EncodedPacket",
+    "InputTrack",
+    "InputVideoTrack",
+    "InputAudioTrack",
+    "canEncode",
+    "canEncodeVideo",
+    "canEncodeAudio",
+    "registerDecoder",
+    "registerEncoder",
+    "QUALITY_VERY_LOW",
+    "QUALITY_LOW",
+    "QUALITY_MEDIUM",
+    "QUALITY_HIGH",
+    "QUALITY_VERY_HIGH",
+    "ALL_FORMATS",
+    "VIDEO_CODECS",
+    "AUDIO_CODECS",
+    "SUBTITLE_CODECS"
+  ]
+}
