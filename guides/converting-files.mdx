@@ -1,0 +1,440 @@
+---
+title: Converting files
+description: Learn how to convert media files between formats, resize video, transcode audio, and trim clips
+---
+
+Mediabunny ships with a powerful built-in file conversion abstraction that makes it easy to convert media files between formats, resize video, change codecs, trim clips, and more.
+
+## Features
+
+The conversion API supports:
+
+- **Transmuxing** - Change the container format
+- **Transcoding** - Change track codecs
+- **Track removal** - Remove unwanted tracks
+- **Compression** - Reduce file size with lower bitrates
+- **Trimming** - Extract specific time ranges
+- **Video resizing & fitting** - Change dimensions and aspect ratio
+- **Video rotation** - Rotate video frames
+- **Video cropping** - Extract rectangular regions
+- **Frame rate adjustment** - Change video frame rate
+- **Audio resampling** - Change sample rate and channel count
+- **Custom processing** - Apply filters and effects
+
+## Basic usage
+
+<Steps>
+  <Step title="Create input and output">
+    ```typescript
+    import {
+      Input,
+      Output,
+      Conversion,
+      ALL_FORMATS,
+      BlobSource,
+      WebMOutputFormat,
+      BufferTarget,
+    } from 'mediabunny';
+
+    const input = new Input({
+      source: new BlobSource(file),
+      formats: ALL_FORMATS,
+    });
+
+    const output = new Output({
+      format: new WebMOutputFormat(),
+      target: new BufferTarget(),
+    });
+    ```
+  </Step>
+
+  <Step title="Initialize the conversion">
+    ```typescript
+    const conversion = await Conversion.init({ input, output });
+
+    if (!conversion.isValid) {
+      // Check why tracks were discarded
+      console.log(conversion.discardedTracks);
+      return;
+    }
+    ```
+  </Step>
+
+  <Step title="Execute the conversion">
+    ```typescript
+    await conversion.execute();
+
+    // Get the final file
+    const convertedFile = output.target.buffer;
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  The `Output` passed to the conversion must be fresh - no tracks added, no metadata set, and in the `'pending'` state.
+</Info>
+
+## Monitoring progress
+
+Track conversion progress with the `onProgress` callback:
+
+```typescript
+const conversion = await Conversion.init({ input, output });
+
+conversion.onProgress = (progress) => {
+  // progress is a number between 0 and 1
+  console.log(`${(progress * 100).toFixed(1)}%`);
+};
+
+await conversion.execute();
+```
+
+<Note>
+  A progress of `1` doesn't mean the conversion is finished - the conversion is only complete when `execute()` resolves.
+</Note>
+
+## Video options
+
+Configure video track conversion with the `video` option:
+
+### Resizing video
+
+```typescript
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: {
+    width: 1280,
+    height: 720,
+    fit: 'contain', // 'fill' | 'contain' | 'cover'
+  },
+});
+```
+
+<Tabs>
+  <Tab title="contain">
+    Contains the entire image within the box while preserving aspect ratio. May result in letterboxing.
+  </Tab>
+  <Tab title="cover">
+    Scales the image until the entire box is filled, while preserving aspect ratio. May crop the image.
+  </Tab>
+  <Tab title="fill">
+    Stretches the image to fill the entire box, potentially altering the aspect ratio.
+  </Tab>
+</Tabs>
+
+If only `width` or `height` is provided, the other dimension is calculated automatically to preserve aspect ratio.
+
+### Rotating video
+
+```typescript
+video: {
+  rotate: 90, // Degrees clockwise: 0 | 90 | 180 | 270
+  allowRotationMetadata: false, // Bake rotation into frames
+}
+```
+
+Rotation is applied on top of any rotation metadata in the input file and happens before cropping and resizing.
+
+### Cropping video
+
+```typescript
+video: {
+  crop: {
+    left: 100,
+    top: 50,
+    width: 1280,
+    height: 720,
+  },
+}
+```
+
+Cropping is applied after rotation but before resizing.
+
+### Transcoding video
+
+```typescript
+import { QUALITY_HIGH } from 'mediabunny';
+
+video: {
+  codec: 'vp9',
+  bitrate: 2e6, // 2 Mbps, or use QUALITY_HIGH
+  keyFrameInterval: 5, // Key frame every 5 seconds
+  frameRate: 30,
+  alpha: 'keep', // 'discard' | 'keep'
+}
+```
+
+### Processing video frames
+
+Apply custom processing to each frame:
+
+```typescript
+let ctx: CanvasRenderingContext2D | null = null;
+
+video: {
+  process: (sample) => {
+    if (!ctx) {
+      const canvas = new OffscreenCanvas(
+        sample.displayWidth,
+        sample.displayHeight
+      );
+      ctx = canvas.getContext('2d')!;
+      
+      // Convert to grayscale
+      ctx.filter = 'saturate(0)';
+    }
+    
+    sample.draw(ctx, 0, 0);
+    return ctx.canvas;
+  },
+}
+```
+
+The `process` function can return:
+- A `VideoSample`
+- A `CanvasImageSource` (canvas, image, video frame)
+- An array of either
+- `null` to drop the frame
+
+## Audio options
+
+Configure audio track conversion with the `audio` option:
+
+### Resampling audio
+
+```typescript
+const conversion = await Conversion.init({
+  input,
+  output,
+  audio: {
+    numberOfChannels: 2, // Stereo
+    sampleRate: 48000, // 48 kHz
+  },
+});
+```
+
+Mediabunny performs automatic up/downmixing using the same algorithm as the Web Audio API.
+
+### Transcoding audio
+
+```typescript
+import { QUALITY_MEDIUM } from 'mediabunny';
+
+audio: {
+  codec: 'opus',
+  bitrate: 128e3, // 128 kbps, or use QUALITY_MEDIUM
+}
+```
+
+### Processing audio samples
+
+```typescript
+audio: {
+  process: (sample) => {
+    // Apply audio effects, transformations, etc.
+    return sample;
+  },
+}
+```
+
+## Track-specific options
+
+Apply different options to each track using functions:
+
+```typescript
+const conversion = await Conversion.init({
+  input,
+  output,
+  
+  // Called for each video track
+  video: (videoTrack) => {
+    if (videoTrack.number > 1) {
+      // Keep only the first video track
+      return { discard: true };
+    }
+    
+    return {
+      // Shrink width to 640 only if wider
+      width: Math.min(videoTrack.displayWidth, 640),
+    };
+  },
+  
+  // Called for each audio track
+  audio: async (audioTrack) => {
+    if (audioTrack.languageCode !== 'eng') {
+      // Keep only English audio tracks
+      return { discard: true };
+    }
+    
+    return {
+      codec: 'aac',
+      bitrate: 128e3,
+    };
+  },
+});
+```
+
+## Trimming
+
+Extract a specific time range from the input:
+
+```typescript
+const conversion = await Conversion.init({
+  input,
+  output,
+  trim: {
+    start: 10,  // Start at 10 seconds
+    end: 25,    // End at 25 seconds
+  },
+});
+```
+
+The output will be 15 seconds long and will begin at timestamp 0.
+
+You can also use negative values to add padding:
+
+```typescript
+trim: {
+  start: -2, // Two seconds of freeze frame/silence at start
+}
+```
+
+## Metadata tags
+
+Control metadata tags in the output:
+
+<CodeGroup>
+```typescript Set custom metadata
+const conversion = await Conversion.init({
+  input,
+  output,
+  tags: {
+    title: 're:Turning',
+    artist: 'Alexander Panos',
+  },
+});
+```
+
+```typescript Augment input metadata
+const conversion = await Conversion.init({
+  input,
+  output,
+  tags: (inputTags) => ({
+    ...inputTags, // Keep existing metadata
+    images: [{ // Add cover art
+      data: coverImageBytes,
+      mimeType: 'image/jpeg',
+      kind: 'coverFront',
+    }],
+    comment: undefined, // Remove comments
+  }),
+});
+```
+
+```typescript Remove all metadata
+const conversion = await Conversion.init({
+  input,
+  output,
+  tags: {},
+});
+```
+</CodeGroup>
+
+## Discarded tracks
+
+If an input track is excluded from the output, it's considered discarded:
+
+```typescript
+const conversion = await Conversion.init({ input, output });
+
+console.log(conversion.discardedTracks);
+// => DiscardedTrack[]
+
+console.log(conversion.isValid);
+// => boolean
+```
+
+Possible discard reasons:
+- `'discarded_by_user'` - You set `discard: true`
+- `'max_track_count_reached'` - No room for more tracks
+- `'max_track_count_of_type_reached'` - No room for this track type
+- `'unknown_source_codec'` - Codec not recognized
+- `'undecodable_source_codec'` - Can't decode the source
+- `'no_encodable_target_codec'` - Can't find an encodable codec for output format
+
+## Canceling a conversion
+
+```typescript
+await conversion.cancel();
+```
+
+This frees up resources and causes any ongoing `execute()` call to throw a `ConversionCanceledError`.
+
+## Examples
+
+<CodeGroup>
+```typescript Compress video
+import { Conversion, QUALITY_VERY_LOW } from 'mediabunny';
+
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: {
+    width: 320,
+    bitrate: QUALITY_VERY_LOW,
+  },
+  audio: {
+    bitrate: 32e3,
+  },
+});
+
+await conversion.execute();
+```
+
+```typescript Convert to WebM
+import { WebMOutputFormat } from 'mediabunny';
+
+const output = new Output({
+  format: new WebMOutputFormat(),
+  target: new BufferTarget(),
+});
+
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: { codec: 'vp9' },
+  audio: { codec: 'opus' },
+});
+
+await conversion.execute();
+```
+
+```typescript Extract 30-second clip
+const conversion = await Conversion.init({
+  input,
+  output,
+  trim: {
+    start: 60,  // Start at 1 minute
+    end: 90,    // End at 1:30
+  },
+});
+
+await conversion.execute();
+```
+
+```typescript Resize and rotate
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: {
+    width: 1920,
+    height: 1080,
+    fit: 'contain',
+    rotate: 90,
+  },
+});
+
+await conversion.execute();
+```
+</CodeGroup>

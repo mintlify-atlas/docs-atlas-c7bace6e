@@ -1,0 +1,344 @@
+---
+title: Media sources
+description: Different media source types and when to use them
+---
+
+Media sources provide APIs for adding media data to an output file. Mediabunny offers multiple source types at different abstraction levels, allowing you to choose the right balance between convenience and control for your use case.
+
+## Overview of media sources
+
+Media sources can be organized into three abstraction levels:
+
+<CardGroup cols={3}>
+  <Card title="High-level sources" icon="layer-group">
+    `CanvasSource`, `AudioBufferSource`, `MediaStreamVideoTrackSource`, `MediaStreamAudioTrackSource`
+    
+    Easy to use, handles encoding automatically.
+  </Card>
+  
+  <Card title="Mid-level sources" icon="code">
+    `VideoSampleSource`, `AudioSampleSource`
+    
+    Work with raw samples, handles encoding internally.
+  </Card>
+  
+  <Card title="Low-level sources" icon="gear">
+    `EncodedVideoPacketSource`, `EncodedAudioPacketSource`
+    
+    Direct packet control, you handle encoding.
+  </Card>
+</CardGroup>
+
+## When to use each source
+
+### CanvasSource
+
+**Best for:** Browser-based rendering, animations, games, data visualizations
+
+`CanvasSource` is ideal when you're rendering to a canvas element and want to capture that rendering as video. This is the most common use case for browser-based video creation.
+
+```typescript src/media-source.ts
+const canvasSource = new CanvasSource(canvas, {
+  codec: 'avc',
+  bitrate: QUALITY_HIGH,
+});
+
+await canvasSource.add(0.0, 0.1); // Timestamp, duration
+await canvasSource.add(0.1, 0.1);
+```
+
+**Advantages:**
+- Simplest API for canvas-based workflows
+- Automatically creates VideoFrames from canvas
+- Handles frame timing internally
+
+**Source code:** [src/media-source.ts:979-1028](/home/daytona/workspace/source/src/media-source.ts#L979-L1028)
+
+### VideoSampleSource
+
+**Best for:** Direct VideoFrame manipulation, custom rendering pipelines, WebCodecs integration
+
+Use `VideoSampleSource` when you need fine-grained control over individual video frames or are working with VideoFrames from other sources.
+
+```typescript src/media-source.ts
+const sampleSource = new VideoSampleSource({
+  codec: 'hevc',
+  bitrate: 5e6,
+});
+
+const sample = new VideoSample(videoFrame, { timestamp: 0.0 });
+await sampleSource.add(sample);
+sample.close();
+```
+
+**Advantages:**
+- Direct access to VideoFrame API
+- Fine control over frame properties
+- Can accept frames from any source
+
+**Source code:** [src/media-source.ts:938-971](/home/daytona/workspace/source/src/media-source.ts#L938-L971)
+
+### MediaStreamVideoTrackSource
+
+**Best for:** Real-time capture (webcams, screen recording), live streaming to file
+
+`MediaStreamVideoTrackSource` automatically captures from a MediaStreamTrack in real-time, making it perfect for recording user media.
+
+```typescript src/media-source.ts
+const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+const videoTrack = stream.getVideoTracks()[0];
+
+const source = new MediaStreamVideoTrackSource(videoTrack, {
+  codec: 'vp9',
+  bitrate: 1e7,
+});
+
+// Automatically starts capturing when output.start() is called
+source.errorPromise.catch(error => console.error(error));
+```
+
+**Advantages:**
+- Automatic real-time capture
+- Built-in pause/resume support
+- Handles timestamp synchronization across multiple tracks
+
+**Important:** Always handle `errorPromise` to catch asynchronous errors.
+
+**Source code:** [src/media-source.ts:1039-1267](/home/daytona/workspace/source/src/media-source.ts#L1039-L1267)
+
+### EncodedVideoPacketSource
+
+**Best for:** Custom encoding pipelines, remuxing without re-encoding, WebCodecs manual control
+
+Use this source when you need complete control over the encoding process or want to bypass encoding entirely.
+
+```typescript src/media-source.ts
+const packetSource = new EncodedVideoPacketSource('av1');
+
+// You handle encoding yourself
+await packetSource.add(encodedPacket, {
+  decoderConfig: {
+    codec: 'av01.0.04M.08',
+    codedWidth: 1920,
+    codedHeight: 1080,
+  },
+});
+```
+
+**Advantages:**
+- Complete control over encoding
+- Can bypass encoding for remuxing
+- Direct access to packet stream
+
+**Requirements:**
+- Must provide decoder config metadata
+- Must handle B-frames correctly (decode order vs presentation order)
+- Packets must be added in decode order
+
+**Source code:** [src/media-source.ts:172-202](/home/daytona/workspace/source/src/media-source.ts#L172-L202)
+
+## Audio sources
+
+### AudioBufferSource
+
+**Best for:** Web Audio API integration, audio processing workflows
+
+```typescript src/media-source.ts
+const bufferSource = new AudioBufferSource({
+  codec: 'opus',
+  bitrate: QUALITY_MEDIUM,
+});
+
+await bufferSource.add(audioBuffer1);
+await bufferSource.add(audioBuffer2);
+```
+
+**Advantages:**
+- Direct AudioBuffer support
+- Automatic timestamp management
+- Perfect for Web Audio API workflows
+
+**Source code:** [src/media-source.ts:1833-1875](/home/daytona/workspace/source/src/media-source.ts#L1833-L1875)
+
+### AudioSampleSource
+
+**Best for:** Raw audio data, AudioData manipulation, custom audio processing
+
+```typescript src/media-source.ts
+const sampleSource = new AudioSampleSource({
+  codec: 'aac',
+  bitrate: 128e3,
+});
+
+await sampleSource.add(audioSample);
+```
+
+**Advantages:**
+- Fine-grained control over audio samples
+- Works with AudioData directly
+- Precise timestamp control
+
+**Source code:** [src/media-source.ts:1792-1825](/home/daytona/workspace/source/src/media-source.ts#L1792-L1825)
+
+### MediaStreamAudioTrackSource
+
+**Best for:** Microphone capture, live audio recording
+
+```typescript src/media-source.ts
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const audioTrack = stream.getAudioTracks()[0];
+
+const source = new MediaStreamAudioTrackSource(audioTrack, {
+  codec: 'opus',
+  bitrate: 128e3,
+});
+
+source.errorPromise.catch(error => console.error(error));
+```
+
+**Advantages:**
+- Automatic real-time capture
+- Synchronized with other MediaStream sources
+- Pause/resume support
+
+**Source code:** [src/media-source.ts:1886-2035](/home/daytona/workspace/source/src/media-source.ts#L1886-L2035)
+
+### EncodedAudioPacketSource
+
+**Best for:** Custom audio encoding, remuxing, direct packet control
+
+```typescript src/media-source.ts
+const packetSource = new EncodedAudioPacketSource('aac');
+
+await packetSource.add(encodedPacket, {
+  decoderConfig: {
+    codec: 'mp4a.40.2',
+    numberOfChannels: 2,
+    sampleRate: 48000,
+  },
+});
+```
+
+**Advantages:**
+- Complete encoding control
+- Bypass encoding for remuxing
+- Direct packet access
+
+**Source code:** [src/media-source.ts:1297-1326](/home/daytona/workspace/source/src/media-source.ts#L1297-L1326)
+
+## Advanced patterns
+
+### Handling backpressure
+
+All media source `add()` methods return promises. Always await these to respect encoder and writer backpressure:
+
+```typescript
+// Wrong - ignores backpressure
+for (let i = 0; i < frames.length; i++) {
+  canvasSource.add(i * frameDuration, frameDuration);
+}
+
+// Correct - respects backpressure
+for (let i = 0; i < frames.length; i++) {
+  await canvasSource.add(i * frameDuration, frameDuration);
+}
+```
+
+### Closing sources early
+
+Close sources as soon as you're done adding data to improve performance:
+
+```typescript
+await videoSource.add(lastFrame);
+videoSource.close(); // Signals no more data coming
+
+// Output can now optimize buffering for other tracks
+```
+
+### Managing video sample size changes
+
+Control what happens when video frame dimensions change:
+
+```typescript
+const source = new VideoSampleSource({
+  codec: 'avc',
+  bitrate: 1e6,
+  sizeChangeBehavior: 'contain', // Options: 'deny', 'passThrough', 'fill', 'contain', 'cover'
+});
+```
+
+### Encoding alpha channels
+
+Preserve transparency when encoding:
+
+```typescript
+const source = new CanvasSource(canvas, {
+  codec: 'vp9', // Use VP9 or other alpha-supporting codec
+  bitrate: QUALITY_HIGH,
+  alpha: 'keep', // Preserve alpha channel
+});
+```
+
+<Note>
+Only certain codecs and containers support alpha channels. VP9 in WebM is the most common combination.
+</Note>
+
+### Custom key frame intervals
+
+Control how frequently key frames are inserted:
+
+```typescript
+const source = new VideoSampleSource({
+  codec: 'hevc',
+  bitrate: 5e6,
+  keyFrameInterval: 2, // Key frame every 2 seconds (default is 5)
+});
+```
+
+<Tip>
+Shorter key frame intervals improve seeking but increase file size. When using multiple video tracks, use the same interval for all tracks.
+</Tip>
+
+### Pausing MediaStream sources
+
+Temporarily pause capture without stopping the underlying stream:
+
+```typescript
+const videoSource = new MediaStreamVideoTrackSource(videoTrack, config);
+
+// Later, pause capture
+videoSource.pause();
+
+// Resume capture (timestamps adjusted to maintain continuous playback)
+videoSource.resume();
+```
+
+## Best practices
+
+<Steps>
+  <Step title="Choose the right abstraction level">
+    Start with high-level sources (CanvasSource, AudioBufferSource) unless you need the control of lower-level sources.
+  </Step>
+  
+  <Step title="Always await add() calls">
+    Respect backpressure by awaiting all `add()` method calls to prevent memory issues.
+  </Step>
+  
+  <Step title="Close sources promptly">
+    Call `close()` on sources as soon as you're done adding data to improve performance.
+  </Step>
+  
+  <Step title="Handle errorPromise for MediaStream sources">
+    Always attach error handlers to `errorPromise` when using MediaStream sources.
+  </Step>
+  
+  <Step title="Match codecs to containers">
+    Ensure your chosen codec is supported by your output format (see [supported formats](/guide/supported-formats-and-codecs)).
+  </Step>
+</Steps>
+
+## See also
+
+- [Writing media files](/guide/writing-media-files) - Complete guide to creating output files
+- [Packets and samples](/guide/packets-and-samples) - Understanding media data structures
+- [Custom coders](/advanced/custom-coders) - Implementing custom encoders and decoders

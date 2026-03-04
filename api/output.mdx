@@ -1,0 +1,225 @@
+---
+title: Output
+description: Create and write output media files
+---
+
+The `Output` class orchestrates the creation of a new media file, allowing you to add tracks and configure output settings.
+
+## Constructor
+
+```typescript
+new Output(options: OutputOptions)
+```
+
+Creates a new instance of Output which can then be used to create a new media file according to the specified OutputOptions.
+
+<ParamField path="options" type="OutputOptions" required>
+  Configuration for the output file
+  
+  <Expandable title="OutputOptions properties">
+    <ParamField path="format" type="OutputFormat" required>
+      The format of the output file.
+    </ParamField>
+    
+    <ParamField path="target" type="Target" required>
+      The target to which the file will be written.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="format" type="OutputFormat">
+  The format of the output file.
+</ResponseField>
+
+<ResponseField name="target" type="Target">
+  The target to which the file will be written.
+</ResponseField>
+
+<ResponseField name="state" type="'pending' | 'started' | 'canceled' | 'finalizing' | 'finalized'">
+  The current state of the output.
+</ResponseField>
+
+## Methods
+
+### addVideoTrack()
+
+```typescript
+addVideoTrack(source: VideoSource, metadata?: VideoTrackMetadata): void
+```
+
+Adds a video track to the output with the given source. Can only be called before the output is started.
+
+<ParamField path="source" type="VideoSource" required>
+  The video source for this track.
+</ParamField>
+
+<ParamField path="metadata" type="VideoTrackMetadata">
+  Track metadata including language, name, rotation, and frame rate
+  
+  <Expandable title="VideoTrackMetadata properties">
+    <ParamField path="languageCode" type="string">
+      The three-letter, ISO 639-2/T language code specifying the language of this track.
+    </ParamField>
+    
+    <ParamField path="name" type="string">
+      A user-defined name for this track, like "English" or "Director Commentary".
+    </ParamField>
+    
+    <ParamField path="disposition" type="Partial<TrackDisposition>">
+      The track's disposition, i.e. information about its intended usage.
+    </ParamField>
+    
+    <ParamField path="rotation" type="Rotation">
+      The angle in degrees by which the track's frames should be rotated (clockwise). Must be 0, 90, 180, or 270.
+    </ParamField>
+    
+    <ParamField path="frameRate" type="number">
+      The expected video frame rate in hertz. If set, all timestamps and durations of this track will be snapped to this frame rate.
+    </ParamField>
+    
+    <ParamField path="maximumPacketCount" type="number">
+      The maximum amount of encoded packets that will be added to this track. Setting this field provides the muxer with an additional signal that it can use to preallocate space in the file.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### addAudioTrack()
+
+```typescript
+addAudioTrack(source: AudioSource, metadata?: AudioTrackMetadata): void
+```
+
+Adds an audio track to the output with the given source. Can only be called before the output is started.
+
+<ParamField path="source" type="AudioSource" required>
+  The audio source for this track.
+</ParamField>
+
+<ParamField path="metadata" type="AudioTrackMetadata">
+  Track metadata including language, name, and disposition
+  
+  <Expandable title="AudioTrackMetadata properties">
+    <ParamField path="languageCode" type="string">
+      The three-letter, ISO 639-2/T language code specifying the language of this track.
+    </ParamField>
+    
+    <ParamField path="name" type="string">
+      A user-defined name for this track.
+    </ParamField>
+    
+    <ParamField path="disposition" type="Partial<TrackDisposition>">
+      The track's disposition, i.e. information about its intended usage.
+    </ParamField>
+    
+    <ParamField path="maximumPacketCount" type="number">
+      The maximum amount of encoded packets that will be added to this track.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### addSubtitleTrack()
+
+```typescript
+addSubtitleTrack(source: SubtitleSource, metadata?: SubtitleTrackMetadata): void
+```
+
+Adds a subtitle track to the output with the given source. Can only be called before the output is started.
+
+<ParamField path="source" type="SubtitleSource" required>
+  The subtitle source for this track.
+</ParamField>
+
+<ParamField path="metadata" type="SubtitleTrackMetadata">
+  Track metadata including language, name, and disposition.
+</ParamField>
+
+### setMetadataTags()
+
+```typescript
+setMetadataTags(tags: MetadataTags): void
+```
+
+Sets descriptive metadata tags about the media file, such as title, author, date, or cover art. When called multiple times, only the metadata from the last call will be used.
+
+Can only be called before the output is started.
+
+<ParamField path="tags" type="MetadataTags" required>
+  Metadata tags to write to the output file.
+</ParamField>
+
+### start()
+
+```typescript
+async start(): Promise<void>
+```
+
+Starts the creation of the output file. This method should be called after all tracks have been added. Only after the output has started can media samples be added to the tracks.
+
+Returns a promise that resolves when the output has successfully started and is ready to receive media samples.
+
+### getMimeType()
+
+```typescript
+async getMimeType(): Promise<string>
+```
+
+Resolves with the full MIME type of the output file, including track codecs.
+
+The returned promise will resolve only once the precise codec strings of all tracks are known.
+
+### finalize()
+
+```typescript
+async finalize(): Promise<void>
+```
+
+Finalizes the output file. This method must be called after all media samples across all tracks have been added. Once the Promise returned by this method completes, the output file is ready.
+
+### cancel()
+
+```typescript
+async cancel(): Promise<void>
+```
+
+Cancels the creation of the output file, releasing internal resources like encoders and preventing further samples from being added.
+
+Returns a promise that resolves once all internal resources have been released.
+
+## Example
+
+```typescript
+import { Output, StreamTarget, Mp4OutputFormat } from '@mediabunny/browser';
+
+const target = new StreamTarget();
+const output = new Output({
+  format: Mp4OutputFormat,
+  target
+});
+
+// Add tracks
+output.addVideoTrack(videoSource, {
+  languageCode: 'eng',
+  name: 'Main Video',
+  frameRate: 30
+});
+
+output.addAudioTrack(audioSource, {
+  languageCode: 'eng',
+  name: 'Stereo Audio'
+});
+
+// Set metadata
+output.setMetadataTags({
+  title: 'My Video',
+  author: 'John Doe'
+});
+
+// Start and process
+await output.start();
+
+// Add samples to sources...
+
+await output.finalize();
+```

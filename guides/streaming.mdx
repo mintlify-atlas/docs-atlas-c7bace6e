@@ -1,0 +1,442 @@
+---
+title: Streaming
+description: Learn how to stream media data for memory-efficient operations with large files
+---
+
+Mediabunny provides powerful streaming capabilities for both reading and writing media files. This enables memory-efficient operations on large files by processing data in chunks rather than loading entire files into memory.
+
+## Input sources
+
+Input sources determine where an `Input` reads data from. All sources support lazy loading - only the bytes needed for the requested operation are read.
+
+### BufferSource
+
+Reads from an in-memory `ArrayBuffer`.
+
+```typescript
+import { BufferSource } from 'mediabunny';
+
+// From ArrayBuffer
+const source = new BufferSource(arrayBuffer);
+
+// From Uint8Array
+const source = new BufferSource(uint8Array);
+```
+
+**Pros:** Fastest source available
+
+**Cons:** Requires entire file in memory
+
+### BlobSource
+
+Reads from a [`Blob`](https://developer.mozilla.org/en-US/docs/Web/API/Blob) or [`File`](https://developer.mozilla.org/en-US/docs/Web/API/File).
+
+```typescript
+import { BlobSource } from 'mediabunny';
+
+const source = new BlobSource(file, {
+  maxCacheSize: 8 * 1024 * 1024, // 8 MiB (default)
+});
+```
+
+**Pros:** Perfect for reading files from disk in the browser
+
+**Cons:** Browser-only
+
+### UrlSource
+
+Fetches data from a remote URL over the network.
+
+```typescript
+import { UrlSource } from 'mediabunny';
+
+const source = new UrlSource('https://example.com/video.mp4', {
+  maxCacheSize: 8 * 1024 * 1024,
+  parallelism: 2, // Max parallel requests
+  requestInit: {
+    headers: {
+      'X-Custom-Header': 'value',
+    },
+  },
+});
+```
+
+<Warning>
+  The server must support range requests (HTTP 206 responses). For cross-origin requests, ensure [CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS) is properly configured.
+</Warning>
+
+**Pros:** Intelligently prefetches data based on access patterns
+
+**Cons:** Requires network access and CORS configuration
+
+#### Retry logic
+
+Customize retry behavior when requests fail:
+
+```typescript
+const source = new UrlSource('https://example.com/video.mp4', {
+  getRetryDelay: (previousAttempts, error, url) => {
+    // Exponential backoff, capped at 16 seconds
+    return Math.min(2 ** previousAttempts, 16);
+    // Return null to stop retrying
+  },
+});
+```
+
+Default behavior:
+- Infinite exponential backoff, capped at 16 seconds
+- No retries if a CORS error is suspected
+
+### FilePathSource
+
+Reads from a file path. Requires Node.js, Bun, or Deno.
+
+```typescript
+import { FilePathSource } from 'mediabunny';
+
+const source = new FilePathSource('/path/to/video.mp4', {
+  maxCacheSize: 8 * 1024 * 1024,
+});
+```
+
+<Warning>
+  Make sure to call `input.dispose()` when done to properly close the internal file handle.
+</Warning>
+
+**Pros:** Direct file system access in server environments
+
+**Cons:** Server-side only
+
+### StreamSource
+
+A general-purpose, callback-driven source for reading data from anywhere.
+
+```typescript
+import { StreamSource } from 'mediabunny';
+import { open } from 'node:fs/promises';
+
+const fileHandle = await open('video.mp4', 'r');
+
+const source = new StreamSource({
+  getSize: async () => {
+    const { size } = await fileHandle.stat();
+    return size;
+  },
+  read: async (start, end) => {
+    const buffer = Buffer.alloc(end - start);
+    await fileHandle.read(buffer, 0, end - start, start);
+    return buffer;
+  },
+  dispose: () => {
+    fileHandle.close();
+  },
+  maxCacheSize: 8 * 1024 * 1024,
+  prefetchProfile: 'fileSystem', // 'none' | 'fileSystem' | 'network'
+});
+```
+
+#### Prefetch profiles
+
+<Tabs>
+  <Tab title="none">
+    No prefetching - only requested data is loaded. Use for random access patterns.
+  </Tab>
+  
+  <Tab title="fileSystem">
+    Small bidirectional prefetching aligned with page boundaries. Use for local file systems.
+  </Tab>
+  
+  <Tab title="network">
+    Aggressive prefetching for high-latency environments. Minimizes read calls and prefetches when sequential access is detected.
+  </Tab>
+</Tabs>
+
+**Pros:** Maximum flexibility - read from any data source
+
+**Cons:** Requires manual implementation
+
+### ReadableStreamSource
+
+Reads from a `ReadableStream` of `Uint8Array` for incrementally streaming files.
+
+```typescript
+import { ReadableStreamSource } from 'mediabunny';
+
+const { writable, readable } = new TransformStream<Uint8Array, Uint8Array>();
+const source = new ReadableStreamSource(readable, {
+  maxCacheSize: 16 * 1024 * 1024, // 16 MiB (default)
+});
+
+// Append chunks of data
+const writer = writable.getWriter();
+writer.write(chunk1);
+writer.write(chunk2);
+writer.close();
+```
+
+<Info>
+  This source is **unsized** - calls to `.getSize()` will throw. Only use with sequential access patterns like reading all packets or doing conversions.
+</Info>
+
+**Pros:** Stream in files while they're being created
+
+**Cons:** Limited to sequential access patterns
+
+#### Using with MediaRecorder
+
+Combine `MediaRecorder` with `ReadableStreamSource` to stream recorded data into Mediabunny:
+
+```typescript
+import {
+  Input,
+  Output,
+  Conversion,
+  ReadableStreamSource,
+  ALL_FORMATS,
+  WavOutputFormat,
+  BufferTarget,
+} from 'mediabunny';
+
+// Set up TransformStream to convert Blobs to Uint8Arrays
+const { writable, readable } = new TransformStream<Blob, Uint8Array>({
+  async transform(chunk, controller) {
+    const arrayBuffer = await chunk.arrayBuffer();
+    controller.enqueue(new Uint8Array(arrayBuffer));
+  },
+});
+
+const input = new Input({
+  source: new ReadableStreamSource(readable),
+  formats: ALL_FORMATS,
+});
+
+const output = new Output({
+  format: new WavOutputFormat(),
+  target: new BufferTarget(),
+});
+
+const conversionPromise = Conversion.init({ input, output })
+  .then(conversion => conversion.execute());
+
+// Start recording
+const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const recorder = new MediaRecorder(micStream);
+const writer = writable.getWriter();
+
+recorder.ondataavailable = e => writer.write(e.data);
+recorder.onstop = async () => {
+  await writer.close();
+  await conversionPromise;
+  
+  // Get the final .wav file
+  const wavFile = output.target.buffer;
+};
+
+recorder.start(1000);
+setTimeout(() => recorder.stop(), 10_000);
+```
+
+### Monitoring reads
+
+All sources support an `onread` callback to inspect which areas of the file are being read:
+
+```typescript
+source.onread = (start, end) => {
+  console.log(`Reading byte range [${start}, ${end})`);
+};
+```
+
+## Output targets
+
+Output targets determine where an `Output` writes data.
+
+### BufferTarget
+
+Writes all data to a single in-memory `ArrayBuffer`.
+
+```typescript
+import { BufferTarget } from 'mediabunny';
+
+const target = new BufferTarget();
+
+// Use with output...
+await output.finalize();
+
+const file = target.buffer; // => ArrayBuffer
+```
+
+**Pros:** Simple and fast for small files
+
+**Cons:** Not suitable for very large files (may cause memory exhaustion)
+
+### StreamTarget
+
+Writes data to a `WritableStream` in chunks.
+
+```typescript
+import { StreamTarget, StreamTargetChunk } from 'mediabunny';
+
+const writable = new WritableStream<StreamTargetChunk>({
+  write(chunk) {
+    chunk.data;     // => Uint8Array
+    chunk.position; // => number (byte offset)
+    
+    // Write data at the specified position...
+  },
+});
+
+const target = new StreamTarget(writable, {
+  chunked: true,
+  chunkSize: 16 * 1024 * 1024, // 16 MiB
+});
+```
+
+<Warning>
+  Some byte regions may be written to multiple times. You **must** write each chunk at the specified byte offset position in the order chunks arrive - don't just concatenate them.
+  
+  Some output formats support append-only mode where simple concatenation works. Check the format documentation.
+</Warning>
+
+#### Chunked mode
+
+Enable chunked mode to reduce write frequency:
+
+```typescript
+new StreamTarget(writable, {
+  chunked: true,
+  chunkSize: 2 ** 20, // 1 MiB
+});
+```
+
+Data is accumulated in memory until chunks reach the specified size before being emitted.
+
+#### Backpressure
+
+The output automatically respects backpressure applied by the `WritableStream`:
+
+```typescript
+const writable = new WritableStream({
+  write(chunk) {
+    // Simulate slow writes
+    return new Promise(resolve => setTimeout(resolve, 10));
+  },
+});
+```
+
+#### Using with File System Access API
+
+`StreamTargetChunk` is compatible with `FileSystemWritableFileStream`:
+
+```typescript
+const handle = await window.showSaveFilePicker();
+const writableStream = await handle.createWritable();
+
+const output = new Output({
+  target: new StreamTarget(writableStream),
+  format: new Mp4OutputFormat(),
+});
+
+// ...
+
+await output.finalize(); // Automatically closes the stream
+```
+
+**Pros:** Memory-efficient for large files, supports backpressure
+
+**Cons:** More complex to use
+
+### FilePathTarget
+
+Writes to a file at the specified path. Requires Node.js, Bun, or Deno.
+
+```typescript
+import { FilePathTarget } from 'mediabunny';
+
+const target = new FilePathTarget('/path/to/output.mp4', {
+  chunked: true, // Default
+  chunkSize: 16 * 1024 * 1024,
+});
+```
+
+The file handle is automatically closed when `finalize()` or `cancel()` is called.
+
+**Pros:** Simple API for writing to disk in server environments
+
+**Cons:** Server-side only
+
+### NullTarget
+
+Discards all data. Useful when extracting data through other means (format callbacks, encoder events).
+
+```typescript
+import { NullTarget, Mp4OutputFormat } from 'mediabunny';
+
+let ftyp: Uint8Array;
+let lastMoof: Uint8Array;
+
+const output = new Output({
+  target: new NullTarget(),
+  format: new Mp4OutputFormat({
+    fastStart: 'fragmented',
+    onFtyp: (data) => { ftyp = data; },
+    onMoof: (data) => { lastMoof = data; },
+    onMdat: (data) => {
+      // Assemble and process fragments...
+    },
+  }),
+});
+```
+
+**Pros:** Zero overhead when you don't need the final file
+
+**Cons:** No output file produced
+
+### Monitoring writes
+
+All targets support an `onwrite` callback:
+
+```typescript
+target.onwrite = (start, end) => {
+  console.log(`Wrote bytes [${start}, ${end})`);
+};
+```
+
+<Warning>
+  This callback is called **extremely** frequently. Use it carefully.
+</Warning>
+
+## Example: Process large file without loading into memory
+
+```typescript
+import {
+  Input,
+  Output,
+  Conversion,
+  UrlSource,
+  FilePathTarget,
+  ALL_FORMATS,
+  Mp4OutputFormat,
+} from 'mediabunny';
+
+// Read from network
+const input = new Input({
+  source: new UrlSource('https://example.com/large-video.mp4'),
+  formats: ALL_FORMATS,
+});
+
+// Write to disk
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new FilePathTarget('/path/to/output.mp4'),
+});
+
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: { width: 1280 },
+});
+
+await conversion.execute();
+
+// File written to disk without loading entire file into memory
+```

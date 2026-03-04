@@ -1,0 +1,339 @@
+---
+title: Samples
+description: Raw unencoded audio and video samples
+---
+
+## VideoSample
+
+Represents a raw, unencoded video frame. Provides methods for creating, manipulating, and converting video frames across different formats.
+
+### Constructor
+
+```typescript
+new VideoSample(init: VideoSampleInit)
+```
+
+<ParamField path="init" type="VideoSampleInit" required>
+  Initialization options for the video sample.
+</ParamField>
+
+### Creating VideoSamples
+
+#### From VideoFrame
+
+```typescript
+VideoSample.fromVideoFrame(frame: VideoFrame, options?: VideoSampleInit): VideoSample
+```
+
+Creates a `VideoSample` from a [`VideoFrame`](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame).
+
+#### From Canvas
+
+```typescript
+VideoSample.fromCanvas(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  options?: VideoSampleInit
+): VideoSample
+```
+
+Creates a `VideoSample` by rendering a canvas element.
+
+#### From Raw Pixels
+
+```typescript
+VideoSample.fromPixels(
+  data: AllowSharedBufferSource,
+  options: SetRequired<VideoSampleInit, 'format' | 'codedWidth' | 'codedHeight'>
+): VideoSample
+```
+
+Creates a `VideoSample` from raw pixel data.
+
+### Properties
+
+<ResponseField name="format" type="VideoSamplePixelFormat">
+  The internal pixel format in which the frame is stored. One of 21 supported formats including I420, NV12, RGBA, etc.
+</ResponseField>
+
+<ResponseField name="codedWidth" type="number">
+  The width of the frame in pixels.
+</ResponseField>
+
+<ResponseField name="codedHeight" type="number">
+  The height of the frame in pixels.
+</ResponseField>
+
+<ResponseField name="displayWidth" type="number">
+  The display width accounting for rotation and pixel aspect ratio.
+</ResponseField>
+
+<ResponseField name="displayHeight" type="number">
+  The display height accounting for rotation and pixel aspect ratio.
+</ResponseField>
+
+<ResponseField name="rotation" type="Rotation">
+  The rotation of the frame in degrees (0, 90, 180, 270), clockwise.
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  The presentation timestamp in seconds.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  The duration in seconds.
+</ResponseField>
+
+<ResponseField name="colorSpace" type="VideoSampleColorSpace">
+  The color space information for the frame.
+</ResponseField>
+
+### Methods
+
+#### toVideoFrame()
+
+Converts this sample to a [`VideoFrame`](https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame).
+
+```typescript
+toVideoFrame(): VideoFrame
+```
+
+#### copyToCanvas()
+
+Draws this video sample onto a canvas.
+
+```typescript
+copyToCanvas(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  options?: CanvasRenderingOptions
+): void
+```
+
+#### copyPixelsTo()
+
+Copies the raw pixel data of this sample to a destination buffer.
+
+```typescript
+copyPixelsTo(
+  destination: AllowSharedBufferSource,
+  options?: VideoSampleCopyToOptions
+): Promise<void>
+```
+
+#### clone()
+
+Creates a copy of this video sample.
+
+```typescript
+clone(): VideoSample
+```
+
+#### close()
+
+Releases underlying resources. You must call this when you're done using the sample.
+
+```typescript
+close(): void
+```
+
+<Warning>
+  Always call `close()` on VideoSamples when you're done using them to prevent memory leaks. VideoSamples hold underlying resources that won't be freed automatically.
+</Warning>
+
+## AudioSample
+
+Represents a raw, unencoded audio buffer. Provides methods for creating, manipulating, and converting audio data.
+
+### Constructor
+
+```typescript
+new AudioSample(init: AudioSampleInit)
+```
+
+<ParamField path="init" type="AudioSampleInit" required>
+  Initialization options for the audio sample.
+</ParamField>
+
+### Creating AudioSamples
+
+#### From AudioData
+
+```typescript
+AudioSample.fromAudioData(data: AudioData, options?: AudioSampleInit): AudioSample
+```
+
+Creates an `AudioSample` from an [`AudioData`](https://developer.mozilla.org/en-US/docs/Web/API/AudioData).
+
+#### From AudioBuffer
+
+```typescript
+AudioSample.fromAudioBuffer(
+  buffer: AudioBuffer,
+  options?: AudioSampleInit
+): AudioSample
+```
+
+Creates an `AudioSample` from an [`AudioBuffer`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer).
+
+#### From Raw Audio Data
+
+```typescript
+AudioSample.fromData(
+  data: AllowSharedBufferSource,
+  options: SetRequired<AudioSampleInit, 'format' | 'numberOfChannels' | 'numberOfFrames' | 'sampleRate'>
+): AudioSample
+```
+
+Creates an `AudioSample` from raw audio data.
+
+### Properties
+
+<ResponseField name="format" type="AudioSampleFormat">
+  The internal format of the audio data (e.g., 's16', 'f32', 's32', 'f32-planar').
+</ResponseField>
+
+<ResponseField name="numberOfChannels" type="number">
+  The number of audio channels (e.g., 2 for stereo).
+</ResponseField>
+
+<ResponseField name="numberOfFrames" type="number">
+  The number of audio frames in this sample.
+</ResponseField>
+
+<ResponseField name="sampleRate" type="number">
+  The sample rate in Hz (e.g., 48000).
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  The presentation timestamp in seconds.
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  The duration in seconds.
+</ResponseField>
+
+### Methods
+
+#### toAudioData()
+
+Converts this sample to an [`AudioData`](https://developer.mozilla.org/en-US/docs/Web/API/AudioData).
+
+```typescript
+toAudioData(): AudioData
+```
+
+#### toAudioBuffer()
+
+Converts this sample to an [`AudioBuffer`](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer).
+
+```typescript
+toAudioBuffer(context?: BaseAudioContext): Promise<AudioBuffer>
+```
+
+#### copyDataTo()
+
+Copies the raw audio data to a destination buffer.
+
+```typescript
+copyDataTo(
+  destination: AllowSharedBufferSource,
+  options?: AudioSampleCopyToOptions
+): void
+```
+
+#### clone()
+
+Creates a copy of this audio sample.
+
+```typescript
+clone(): AudioSample
+```
+
+#### close()
+
+Releases underlying resources. You must call this when you're done using the sample.
+
+```typescript
+close(): void
+```
+
+<Warning>
+  Always call `close()` on AudioSamples when you're done using them to prevent memory leaks.
+</Warning>
+
+## VideoSamplePixelFormat
+
+The internal pixel format with which a VideoSample is stored. See [WebCodecs pixel formats](https://www.w3.org/TR/webcodecs/#pixel-format) for more details.
+
+```typescript
+type VideoSamplePixelFormat =
+  | 'I420' | 'I420P10' | 'I420P12'      // 4:2:0 Y, U, V
+  | 'I420A' | 'I420AP10' | 'I420AP12'   // 4:2:0 Y, U, V, A
+  | 'I422' | 'I422P10' | 'I422P12'      // 4:2:2 Y, U, V
+  | 'I422A' | 'I422AP10' | 'I422AP12'   // 4:2:2 Y, U, V, A
+  | 'I444' | 'I444P10' | 'I444P12'      // 4:4:4 Y, U, V
+  | 'I444A' | 'I444AP10' | 'I444AP12'   // 4:4:4 Y, U, V, A
+  | 'NV12'                               // 4:2:0 Y, UV
+  | 'RGBA' | 'RGBX'                      // 4:4:4 RGBA/RGBX
+  | 'BGRA' | 'BGRX';                     // 4:4:4 BGRA/BGRX
+```
+
+## VideoSampleColorSpace
+
+Color space information for video samples.
+
+```typescript
+type VideoSampleColorSpace = {
+  primaries?: 'bt709' | 'bt470bg' | 'smpte170m' | 'bt2020' | 'smpte432';
+  transfer?: 'bt709' | 'smpte170m' | 'iec61966-2-1' | 'linear' | 'pq' | 'hlg';
+  matrix?: 'rgb' | 'bt709' | 'bt470bg' | 'smpte170m' | 'bt2020-ncl';
+  fullRange?: boolean;
+}
+```
+
+## Example
+
+```typescript
+import { VideoSample, AudioSample } from 'mediabunny';
+
+// Create a video sample from a canvas
+const canvas = document.createElement('canvas');
+canvas.width = 1920;
+canvas.height = 1080;
+const ctx = canvas.getContext('2d');
+ctx.fillStyle = 'blue';
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+const videoSample = VideoSample.fromCanvas(canvas, {
+  timestamp: 0,
+  duration: 1/30
+});
+
+console.log(`Video: ${videoSample.codedWidth}x${videoSample.codedHeight}`);
+console.log(`Format: ${videoSample.format}`);
+
+// Always close when done
+videoSample.close();
+
+// Create an audio sample from an AudioBuffer
+const audioContext = new AudioContext();
+const audioBuffer = audioContext.createBuffer(2, 48000, 48000);
+
+const audioSample = AudioSample.fromAudioBuffer(audioBuffer, {
+  timestamp: 0
+});
+
+console.log(`Audio: ${audioSample.numberOfChannels} channels`);
+console.log(`Sample rate: ${audioSample.sampleRate}Hz`);
+
+// Always close when done
+audioSample.close();
+```
+
+## See also
+
+- [Packets](/api/packets) - Encoded compressed media data
+- [Packets and samples concept](/concepts/packets-and-samples) - Understanding the difference
+- [VideoSampleSource](/api/media-sources/video-sources#videosamplesource) - Add video samples to output
+- [AudioSampleSource](/api/media-sources/audio-sources#audiosamplesource) - Add audio samples to output
+- [VideoSampleSink](/api/media-sinks/video-sinks#videosamplesink) - Extract video samples from input
+- [AudioSampleSink](/api/media-sinks/audio-sinks#audiosamplesink) - Extract audio samples from input

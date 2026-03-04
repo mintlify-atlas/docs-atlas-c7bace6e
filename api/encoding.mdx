@@ -1,0 +1,433 @@
+---
+title: Encoding
+description: Video and audio encoding configuration and utilities
+---
+
+## Overview
+
+The encoding module provides types and functions for configuring and checking media encoding capabilities.
+
+## Types
+
+### VideoEncodingConfig
+
+Configuration object that controls video encoding.
+
+<ParamField path="codec" type="VideoCodec" required>
+  The video codec that should be used for encoding the video samples (frames).
+</ParamField>
+
+<ParamField path="bitrate" type="number | Quality" required>
+  The target bitrate for the encoded video, in bits per second. Alternatively, a subjective `Quality` can be provided.
+</ParamField>
+
+<ParamField path="keyFrameInterval" type="number" default="5">
+  The interval, in seconds, of how often frames are encoded as a key frame. Frequent key frames improve seeking behavior but increase file size. When using multiple video tracks, you should give them all the same key frame interval.
+</ParamField>
+
+<ParamField path="sizeChangeBehavior" type="'deny' | 'passThrough' | 'fill' | 'contain' | 'cover'" default="'deny'">
+  Video frames may change size over time. This field controls the behavior in case this happens.
+  
+  - `'deny'` (default): Throw an error, requiring all frames to have the exact same dimensions
+  - `'passThrough'`: Allow the change and directly pass the frame to the encoder
+  - `'fill'`: Stretch the image to fill the entire original box, potentially altering aspect ratio
+  - `'contain'`: Contain the entire image within the original box while preserving aspect ratio (may cause letterboxing)
+  - `'cover'`: Scale the image until the entire original box is filled, while preserving aspect ratio
+</ParamField>
+
+<ParamField path="alpha" type="'discard' | 'keep'" default="'discard'">
+  What to do with alpha data contained in the video samples.
+  
+  - `'discard'` (default): Only the samples' color data is kept; the video is opaque
+  - `'keep'`: The samples' alpha data is also encoded as side data. Pair this with a container format that supports transparency (WebM or Matroska)
+</ParamField>
+
+<ParamField path="bitrateMode" type="'constant' | 'variable'" default="'variable'">
+  Configures the bitrate mode.
+</ParamField>
+
+<ParamField path="latencyMode" type="'quality' | 'realtime'" default="'quality'">
+  The latency mode used by the encoder; controls the performance-quality tradeoff.
+  
+  - `'quality'` (default): The encoder prioritizes quality over latency, and no frames can be dropped
+  - `'realtime'`: The encoder prioritizes low latency over quality, and may drop frames if overloaded
+</ParamField>
+
+<ParamField path="onEncodedPacket" type="(packet: EncodedPacket, meta?: EncodedVideoChunkMetadata) => unknown">
+  Called for each successfully encoded packet. Both the packet and the encoding metadata are passed.
+</ParamField>
+
+<ParamField path="onEncoderConfig" type="(config: VideoEncoderConfig) => unknown">
+  Called when the internal encoder config is created.
+</ParamField>
+
+**Source:** encode.ts:33
+
+### AudioEncodingConfig
+
+Configuration object that controls audio encoding.
+
+<ParamField path="codec" type="AudioCodec" required>
+  The audio codec that should be used for encoding the audio samples.
+</ParamField>
+
+<ParamField path="bitrate" type="number | Quality">
+  The target bitrate for the encoded audio, in bits per second. Alternatively, a subjective `Quality` can be provided. Required for compressed audio codecs, unused for PCM codecs.
+</ParamField>
+
+<ParamField path="bitrateMode" type="'constant' | 'variable'">
+  Configures the bitrate mode.
+</ParamField>
+
+<ParamField path="onEncodedPacket" type="(packet: EncodedPacket, meta?: EncodedAudioChunkMetadata) => unknown">
+  Called for each successfully encoded packet. Both the packet and the encoding metadata are passed.
+</ParamField>
+
+<ParamField path="onEncoderConfig" type="(config: AudioEncoderConfig) => unknown">
+  Called when the internal encoder config is created.
+</ParamField>
+
+**Source:** encode.ts:230
+
+### Quality
+
+Represents a subjective media quality level.
+
+```typescript
+class Quality {
+  constructor(factor: number);
+}
+```
+
+**Source:** encode.ts:339
+
+## Quality constants
+
+### QUALITY_VERY_LOW
+
+Represents a very low media quality.
+
+```typescript
+const QUALITY_VERY_LOW: Quality; // factor: 0.3
+```
+
+**Source:** encode.ts:420
+
+### QUALITY_LOW
+
+Represents a low media quality.
+
+```typescript
+const QUALITY_LOW: Quality; // factor: 0.6
+```
+
+**Source:** encode.ts:426
+
+### QUALITY_MEDIUM
+
+Represents a medium media quality.
+
+```typescript
+const QUALITY_MEDIUM: Quality; // factor: 1.0
+```
+
+**Source:** encode.ts:432
+
+### QUALITY_HIGH
+
+Represents a high media quality.
+
+```typescript
+const QUALITY_HIGH: Quality; // factor: 2.0
+```
+
+**Source:** encode.ts:438
+
+### QUALITY_VERY_HIGH
+
+Represents a very high media quality.
+
+```typescript
+const QUALITY_VERY_HIGH: Quality; // factor: 4.0
+```
+
+**Source:** encode.ts:444
+
+## Functions
+
+### canEncode
+
+Checks if the browser is able to encode the given codec.
+
+```typescript
+function canEncode(codec: MediaCodec): Promise<boolean>
+```
+
+<ParamField path="codec" type="MediaCodec" required>
+  The media codec to check for encoding support.
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  A promise that resolves to `true` if the codec can be encoded, `false` otherwise.
+</ResponseField>
+
+**Source:** encode.ts:451
+
+### canEncodeVideo
+
+Checks if the browser is able to encode the given video codec with the given parameters.
+
+```typescript
+function canEncodeVideo(
+  codec: VideoCodec,
+  options?: {
+    width?: number;
+    height?: number;
+    bitrate?: number | Quality;
+  } & VideoEncodingAdditionalOptions
+): Promise<boolean>
+```
+
+<ParamField path="codec" type="VideoCodec" required>
+  The video codec to check.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional encoding parameters to test.
+  
+  <Expandable title="properties">
+    <ParamField path="width" type="number" default="1280">
+      Video width in pixels.
+    </ParamField>
+    
+    <ParamField path="height" type="number" default="720">
+      Video height in pixels.
+    </ParamField>
+    
+    <ParamField path="bitrate" type="number | Quality" default="1000000">
+      Target bitrate or quality level.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  A promise that resolves to `true` if the video codec can be encoded with the given parameters.
+</ResponseField>
+
+**Source:** encode.ts:468
+
+### canEncodeAudio
+
+Checks if the browser is able to encode the given audio codec with the given parameters.
+
+```typescript
+function canEncodeAudio(
+  codec: AudioCodec,
+  options?: {
+    numberOfChannels?: number;
+    sampleRate?: number;
+    bitrate?: number | Quality;
+  } & AudioEncodingAdditionalOptions
+): Promise<boolean>
+```
+
+<ParamField path="codec" type="AudioCodec" required>
+  The audio codec to check.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional encoding parameters to test.
+  
+  <Expandable title="properties">
+    <ParamField path="numberOfChannels" type="number" default="2">
+      Number of audio channels.
+    </ParamField>
+    
+    <ParamField path="sampleRate" type="number" default="48000">
+      Audio sample rate in Hz.
+    </ParamField>
+    
+    <ParamField path="bitrate" type="number | Quality" default="128000">
+      Target bitrate or quality level.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="return" type="Promise<boolean>">
+  A promise that resolves to `true` if the audio codec can be encoded with the given parameters.
+</ResponseField>
+
+**Source:** encode.ts:585
+
+### getEncodableCodecs
+
+Returns the list of all media codecs that can be encoded by the browser.
+
+```typescript
+function getEncodableCodecs(): Promise<MediaCodec[]>
+```
+
+<ResponseField name="return" type="Promise<MediaCodec[]>">
+  Array of all encodable video, audio, and subtitle codecs.
+</ResponseField>
+
+**Source:** encode.ts:669
+
+### getEncodableVideoCodecs
+
+Returns the list of all video codecs that can be encoded by the browser.
+
+```typescript
+function getEncodableVideoCodecs(
+  checkedCodecs?: VideoCodec[],
+  options?: {
+    width?: number;
+    height?: number;
+    bitrate?: number | Quality;
+  }
+): Promise<VideoCodec[]>
+```
+
+<ParamField path="checkedCodecs" type="VideoCodec[]" default="VIDEO_CODECS">
+  Array of codecs to check. Defaults to all video codecs.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional parameters for encoding capability testing.
+</ParamField>
+
+<ResponseField name="return" type="Promise<VideoCodec[]>">
+  Array of encodable video codecs from the checked list.
+</ResponseField>
+
+**Source:** encode.ts:684
+
+### getEncodableAudioCodecs
+
+Returns the list of all audio codecs that can be encoded by the browser.
+
+```typescript
+function getEncodableAudioCodecs(
+  checkedCodecs?: AudioCodec[],
+  options?: {
+    numberOfChannels?: number;
+    sampleRate?: number;
+    bitrate?: number | Quality;
+  }
+): Promise<AudioCodec[]>
+```
+
+<ParamField path="checkedCodecs" type="AudioCodec[]" default="AUDIO_CODECS">
+  Array of codecs to check. Defaults to all audio codecs.
+</ParamField>
+
+<ParamField path="options" type="object">
+  Optional parameters for encoding capability testing.
+</ParamField>
+
+<ResponseField name="return" type="Promise<AudioCodec[]>">
+  Array of encodable audio codecs from the checked list.
+</ResponseField>
+
+**Source:** encode.ts:701
+
+### getFirstEncodableVideoCodec
+
+Returns the first video codec from the given list that can be encoded by the browser.
+
+```typescript
+function getFirstEncodableVideoCodec(
+  checkedCodecs: VideoCodec[],
+  options?: {
+    width?: number;
+    height?: number;
+    bitrate?: number | Quality;
+  }
+): Promise<VideoCodec | null>
+```
+
+<ResponseField name="return" type="Promise<VideoCodec | null>">
+  The first encodable codec from the list, or `null` if none are encodable.
+</ResponseField>
+
+**Source:** encode.ts:730
+
+### getFirstEncodableAudioCodec
+
+Returns the first audio codec from the given list that can be encoded by the browser.
+
+```typescript
+function getFirstEncodableAudioCodec(
+  checkedCodecs: AudioCodec[],
+  options?: {
+    numberOfChannels?: number;
+    sampleRate?: number;
+    bitrate?: number | Quality;
+  }
+): Promise<AudioCodec | null>
+```
+
+<ResponseField name="return" type="Promise<AudioCodec | null>">
+  The first encodable codec from the list, or `null` if none are encodable.
+</ResponseField>
+
+**Source:** encode.ts:752
+
+## Usage examples
+
+### Check encoding capabilities
+
+```typescript
+import { canEncodeVideo, canEncodeAudio } from 'mediabunny';
+
+// Check if AVC encoding is supported
+const canEncodeAVC = await canEncodeVideo('avc');
+console.log('Can encode AVC:', canEncodeAVC);
+
+// Check with specific parameters
+const canEncode4K = await canEncodeVideo('av1', {
+  width: 3840,
+  height: 2160,
+  bitrate: 10_000_000
+});
+
+// Check audio encoding
+const canEncodeAAC = await canEncodeAudio('aac', {
+  numberOfChannels: 2,
+  sampleRate: 48000,
+  bitrate: 128_000
+});
+```
+
+### Get available codecs
+
+```typescript
+import { getEncodableVideoCodecs, getFirstEncodableVideoCodec } from 'mediabunny';
+
+// Get all encodable video codecs
+const videoCodecs = await getEncodableVideoCodecs();
+console.log('Available video codecs:', videoCodecs);
+
+// Find the first encodable codec from a preference list
+const preferredCodecs = ['av1', 'hevc', 'avc'];
+const codec = await getFirstEncodableVideoCodec(preferredCodecs);
+console.log('Using codec:', codec);
+```
+
+### Configure encoding with quality presets
+
+```typescript
+import { QUALITY_HIGH, QUALITY_MEDIUM, type VideoEncodingConfig } from 'mediabunny';
+
+const videoConfig: VideoEncodingConfig = {
+  codec: 'avc',
+  bitrate: QUALITY_HIGH, // Uses quality preset instead of fixed bitrate
+  keyFrameInterval: 3,
+  sizeChangeBehavior: 'contain'
+};
+
+const audioConfig: AudioEncodingConfig = {
+  codec: 'aac',
+  bitrate: QUALITY_MEDIUM
+};
+```

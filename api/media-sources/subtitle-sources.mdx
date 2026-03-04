@@ -1,0 +1,133 @@
+---
+title: Subtitle sources
+description: Subtitle source classes for adding subtitle cues to output tracks
+---
+
+Subtitle sources are used to add subtitle data to output subtitle tracks. All subtitle sources extend the base `SubtitleSource` class.
+
+## TextSubtitleSource
+
+Parses subtitle text from a subtitle file format and adds the cues to the output subtitle track.
+
+### Constructor
+
+```typescript
+new TextSubtitleSource(codec: SubtitleCodec)
+```
+
+<ParamField path="codec" type="SubtitleCodec" required>
+  The subtitle format/codec used in the text being added. Supported values:
+  - `'srt'` - SubRip subtitle format
+  - `'webvtt'` - WebVTT subtitle format
+  - `'ass'` - Advanced SubStation Alpha format
+</ParamField>
+
+### Methods
+
+#### add
+
+Parses subtitle text according to the specified codec and adds it to the output track. You don't have to add the entire subtitle file at once - you can provide it in chunks.
+
+```typescript
+add(text: string): Promise<void>
+```
+
+<ParamField path="text" type="string" required>
+  The subtitle text to parse and add. Can be the entire subtitle file content or a chunk of it.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+**Example:**
+
+```typescript
+import { TextSubtitleSource } from 'mediabunny';
+
+const subtitleSource = new TextSubtitleSource('srt');
+
+// You can add the entire subtitle file at once
+await subtitleSource.add(`1
+00:00:00,000 --> 00:00:02,000
+Hello, world!
+
+2
+00:00:02,500 --> 00:00:05,000
+Welcome to Mediabunny.
+`);
+
+// Or add it in chunks as you read from a stream
+const reader = subtitleFileStream.getReader();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  await subtitleSource.add(new TextDecoder().decode(value));
+}
+```
+
+#### close
+
+Closes the source, preventing future subtitle cues from being added and signaling that no more data will be added to this track.
+
+```typescript
+close(): void
+```
+
+<Note>
+Calling `close()` is optional but recommended after adding the last subtitle chunk for improved performance and reduced memory usage.
+</Note>
+
+---
+
+## Subtitle formats
+
+### SubRip (.srt)
+
+The SubRip format is a simple, widely-supported subtitle format. Each subtitle consists of:
+1. A sequential number
+2. Timing information (start --> end)
+3. The subtitle text
+4. A blank line
+
+```srt
+1
+00:00:00,000 --> 00:00:02,000
+First subtitle
+
+2
+00:00:02,500 --> 00:00:05,000
+Second subtitle
+```
+
+### WebVTT (.vtt)
+
+WebVTT (Web Video Text Tracks) is the native subtitle format for HTML5 video. It supports styling and positioning.
+
+```vtt
+WEBVTT
+
+00:00:00.000 --> 00:00:02.000
+First subtitle
+
+00:00:02.500 --> 00:00:05.000
+Second subtitle with <b>formatting</b>
+```
+
+### Advanced SubStation Alpha (.ass)
+
+ASS is an advanced subtitle format that supports complex styling, positioning, and animations. It's commonly used for anime and fan subtitles.
+
+```ass
+[Script Info]
+Title: Example
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,First subtitle
+Dialogue: 0,0:00:02.50,0:00:05.00,Default,,0,0,0,,Second subtitle
+```

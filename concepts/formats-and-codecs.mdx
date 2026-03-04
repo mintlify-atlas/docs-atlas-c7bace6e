@@ -1,0 +1,445 @@
+---
+title: Formats and Codecs
+description: Understanding container formats, codecs, and their compatibility in Mediabunny
+---
+
+In media processing, it's crucial to understand the difference between **container formats** and **codecs**. Mediabunny supports a wide range of both, giving you flexibility in how you process media files.
+
+## Container formats vs codecs
+
+Think of a media file as a shipping box:
+
+<CardGroup cols={2}>
+<Card title="Container Format" icon="box">
+The box itself - defines how media data, metadata, and multiple tracks are organized and stored together. Examples: MP4, WebM, MKV.
+</Card>
+
+<Card title="Codec" icon="file-code">
+What's inside the box - the compression algorithm used to encode/decode the actual video or audio data. Examples: H.264, VP9, AAC.
+</Card>
+</CardGroup>
+
+A single container format can hold media encoded with various codecs, but not all combinations are valid. For example:
+- ✅ MP4 can contain H.264 video and AAC audio
+- ✅ WebM can contain VP9 video and Opus audio  
+- ❌ WebM cannot contain H.264 video (not in WebM specification)
+
+## Supported container formats
+
+Mediabunny supports these container formats for both reading and writing:
+
+### Video containers
+
+<Tabs>
+<Tab title="MP4">
+**MPEG-4 Part 14** - The most widely supported video container format.
+
+- **Extension**: `.mp4`
+- **MIME Type**: `video/mp4`
+- **Best for**: Universal compatibility, web delivery, mobile devices
+- **Video codecs**: H.264 (AVC), H.265 (HEVC), VP9, AV1, VP8
+- **Audio codecs**: AAC, MP3, Opus, Vorbis, FLAC, AC-3, E-AC-3, most PCM variants
+
+```typescript input-format.ts:83-104
+export class Mp4InputFormat extends IsobmffInputFormat {
+  async _canReadInput(input: Input) {
+    const majorBrand = await this._getMajorBrand(input);
+    return !!majorBrand && majorBrand !== 'qt  ';
+  }
+
+  get name() {
+    return 'MP4';
+  }
+
+  get mimeType() {
+    return 'video/mp4';
+  }
+}
+```
+
+<Info>
+MP4 is based on the ISO Base Media File Format (ISOBMFF), which QuickTime also uses.
+</Info>
+</Tab>
+
+<Tab title="WebM">
+**WebM** - An open, royalty-free format optimized for web use.
+
+- **Extension**: `.webm`
+- **MIME Type**: `video/webm`
+- **Best for**: Web streaming, HTML5 video, open-source projects
+- **Video codecs**: VP8, VP9, AV1 only
+- **Audio codecs**: Opus, Vorbis only
+
+```typescript output-format.ts:526-561
+export class WebMOutputFormat extends MkvOutputFormat {
+  override getSupportedCodecs(): MediaCodec[] {
+    return [
+      ...VIDEO_CODECS.filter(codec => ['vp8', 'vp9', 'av1'].includes(codec)),
+      ...AUDIO_CODECS.filter(codec => ['opus', 'vorbis'].includes(codec)),
+      ...SUBTITLE_CODECS,
+    ];
+  }
+}
+```
+
+<Warning>
+WebM has strict codec requirements - only VP8/VP9/AV1 for video and Opus/Vorbis for audio.
+</Warning>
+</Tab>
+
+<Tab title="Matroska (MKV)">
+**Matroska** - A flexible, open standard container format.
+
+- **Extension**: `.mkv`
+- **MIME Type**: `video/x-matroska`  
+- **Best for**: Archival, high-quality video, multiple audio/subtitle tracks
+- **Video codecs**: All supported video codecs
+- **Audio codecs**: All non-PCM codecs, most PCM variants
+
+```typescript input-format.ts:138-228
+export class MatroskaInputFormat extends InputFormat {
+  get name() {
+    return 'Matroska';
+  }
+
+  get mimeType() {
+    return 'video/x-matroska';
+  }
+}
+```
+
+<Tip>
+Matroska supports transparent video when alpha side data is provided.
+</Tip>
+</Tab>
+
+<Tab title="QuickTime (MOV)">
+**QuickTime File Format** - Apple's multimedia container.
+
+- **Extension**: `.mov`
+- **MIME Type**: `video/quicktime`
+- **Best for**: Apple ecosystem, professional video editing
+- **Video codecs**: All supported video codecs
+- **Audio codecs**: All supported audio codecs (including all PCM variants)
+
+```typescript input-format.ts:114-128
+export class QuickTimeInputFormat extends IsobmffInputFormat {
+  async _canReadInput(input: Input) {
+    const majorBrand = await this._getMajorBrand(input);
+    return majorBrand === 'qt  ';
+  }
+
+  get name() {
+    return 'QuickTime File Format';
+  }
+}
+```
+</Tab>
+
+<Tab title="MPEG-TS">
+**MPEG Transport Stream** - Designed for streaming and broadcast.
+
+- **Extension**: `.ts`
+- **MIME Type**: `video/MP2T`
+- **Best for**: Live streaming, broadcast, network transmission
+- **Video codecs**: H.264 (AVC), H.265 (HEVC)
+- **Audio codecs**: AAC, MP3, AC-3, E-AC-3
+
+```typescript input-format.ts:517-553
+export class MpegTsInputFormat extends InputFormat {
+  get name() {
+    return 'MPEG Transport Stream';
+  }
+
+  get mimeType() {
+    return 'video/MP2T';
+  }
+}
+```
+</Tab>
+</Tabs>
+
+### Audio-only containers
+
+<Tabs>
+<Tab title="MP3">
+**MPEG-1/2 Audio Layer 3** - The ubiquitous audio format.
+
+- **Extension**: `.mp3`
+- **MIME Type**: `audio/mpeg`
+- **Audio codec**: MP3 only
+- **Track limit**: 1 audio track
+
+```typescript output-format.ts:589-648
+export class Mp3OutputFormat extends OutputFormat {
+  getSupportedCodecs(): MediaCodec[] {
+    return ['mp3'];
+  }
+
+  get supportsTimestampedMediaData() {
+    return false;
+  }
+}
+```
+</Tab>
+
+<Tab title="WAV">
+**Waveform Audio File Format** - Uncompressed audio standard.
+
+- **Extension**: `.wav`
+- **MIME Type**: `audio/wav`
+- **Audio codecs**: PCM variants (s16, s24, s32, f32, u8, μ-law, A-law)
+- **Track limit**: 1 audio track
+
+```typescript output-format.ts:684-750
+export class WavOutputFormat extends OutputFormat {
+  getSupportedCodecs(): MediaCodec[] {
+    return [
+      ...PCM_AUDIO_CODECS.filter(codec =>
+        ['pcm-s16', 'pcm-s24', 'pcm-s32', 'pcm-f32', 'pcm-u8', 'ulaw', 'alaw'].includes(codec),
+      ),
+    ];
+  }
+}
+```
+</Tab>
+
+<Tab title="FLAC">
+**Free Lossless Audio Codec** - Lossless compression for audio.
+
+- **Extension**: `.flac`
+- **MIME Type**: `audio/flac`
+- **Audio codec**: FLAC only
+- **Track limit**: 1 audio track
+
+```typescript input-format.ts:412-434
+export class FlacInputFormat extends InputFormat {
+  get name() {
+    return 'FLAC';
+  }
+
+  get mimeType() {
+    return 'audio/flac';
+  }
+}
+```
+</Tab>
+
+<Tab title="Ogg">
+**Ogg** - Open container format for free codecs.
+
+- **Extension**: `.ogg`
+- **MIME Type**: `application/ogg`
+- **Audio codecs**: Vorbis, Opus
+- **Track limit**: Multiple audio tracks supported
+
+```typescript output-format.ts:779-845
+export class OggOutputFormat extends OutputFormat {
+  getSupportedCodecs(): MediaCodec[] {
+    return [
+      ...AUDIO_CODECS.filter(codec => ['vorbis', 'opus'].includes(codec)),
+    ];
+  }
+}
+```
+</Tab>
+
+<Tab title="ADTS">
+**Audio Data Transport Stream** - AAC elementary stream.
+
+- **Extension**: `.aac`
+- **MIME Type**: `audio/aac`
+- **Audio codec**: AAC only
+- **Track limit**: 1 audio track
+
+```typescript input-format.ts:444-507
+export class AdtsInputFormat extends InputFormat {
+  get name() {
+    return 'ADTS';
+  }
+
+  get mimeType() {
+    return 'audio/aac';
+  }
+}
+```
+</Tab>
+</Tabs>
+
+## Supported codecs
+
+Mediabunny supports 25+ codecs across video, audio, and subtitle categories.
+
+### Video codecs (5)
+
+```typescript codec.ts:34-40
+export const VIDEO_CODECS = [
+  'avc',     // H.264/MPEG-4 AVC
+  'hevc',    // H.265/HEVC
+  'vp9',     // VP9
+  'av1',     // AV1
+  'vp8',     // VP8
+] as const;
+```
+
+<Accordion title="Video codec details">
+- **AVC (H.264)**: Most widely supported, good compression, broad device compatibility
+- **HEVC (H.265)**: Better compression than H.264, 4K/8K video, newer devices
+- **VP9**: Open-source, YouTube standard, good for web delivery
+- **AV1**: Next-gen open codec, superior compression, growing support
+- **VP8**: Predecessor to VP9, legacy web video
+</Accordion>
+
+### Audio codecs (19)
+
+Audio codecs are divided into compressed and uncompressed (PCM) formats:
+
+<CodeGroup>
+```typescript Compressed
+export const NON_PCM_AUDIO_CODECS = [
+  'aac',      // Advanced Audio Coding
+  'opus',     // Opus
+  'mp3',      // MPEG-1/2 Audio Layer 3
+  'vorbis',   // Vorbis
+  'flac',     // Free Lossless Audio Codec
+  'ac3',      // Dolby Digital AC-3
+  'eac3',     // Dolby Digital Plus E-AC-3
+] as const;
+```
+
+```typescript PCM (Uncompressed)
+export const PCM_AUDIO_CODECS = [
+  'pcm-s16',    // 16-bit signed int, little-endian
+  'pcm-s16be',  // 16-bit signed int, big-endian
+  'pcm-s24',    // 24-bit signed int, little-endian
+  'pcm-s24be',  // 24-bit signed int, big-endian
+  'pcm-s32',    // 32-bit signed int, little-endian
+  'pcm-s32be',  // 32-bit signed int, big-endian
+  'pcm-f32',    // 32-bit float, little-endian
+  'pcm-f32be',  // 32-bit float, big-endian
+  'pcm-f64',    // 64-bit float, little-endian
+  'pcm-f64be',  // 64-bit float, big-endian
+  'pcm-u8',     // 8-bit unsigned int
+  'pcm-s8',     // 8-bit signed int
+  'ulaw',       // μ-law
+  'alaw',       // A-law
+] as const;
+```
+</CodeGroup>
+
+### Subtitle codecs (1)
+
+```typescript codec.ts:90-92
+export const SUBTITLE_CODECS = [
+  'webvtt',   // WebVTT text tracks
+] as const;
+```
+
+## Format and codec compatibility
+
+Not all codecs work with all formats. Use this compatibility matrix:
+
+| Format | Video Codecs | Audio Codecs | Subtitles |
+|--------|--------------|--------------|----------|
+| **MP4** | All video codecs | All non-PCM + some PCM | WebVTT |
+| **MOV** | All video codecs | All audio codecs | No |
+| **WebM** | VP8, VP9, AV1 only | Opus, Vorbis only | WebVTT |
+| **MKV** | All video codecs | All non-PCM + most PCM | WebVTT |
+| **MPEG-TS** | AVC, HEVC | AAC, MP3, AC-3, E-AC-3 | No |
+| **MP3** | No | MP3 only | No |
+| **WAV** | No | PCM only (7 variants) | No |
+| **FLAC** | No | FLAC only | No |
+| **Ogg** | No | Vorbis, Opus | No |
+| **ADTS** | No | AAC only | No |
+
+### Checking compatibility
+
+You can programmatically check if a codec is supported by a format:
+
+```typescript
+import { Mp4OutputFormat, WebMOutputFormat } from 'mediabunny';
+
+const mp4Format = new Mp4OutputFormat();
+const webmFormat = new WebMOutputFormat();
+
+// Check video codec support
+const mp4VideoCodecs = mp4Format.getSupportedVideoCodecs();
+console.log(mp4VideoCodecs); // ['avc', 'hevc', 'vp9', 'av1', 'vp8']
+
+const webmVideoCodecs = webmFormat.getSupportedVideoCodecs();
+console.log(webmVideoCodecs); // ['vp8', 'vp9', 'av1']
+
+// Check audio codec support
+const mp4AudioCodecs = mp4Format.getSupportedAudioCodecs();
+const webmAudioCodecs = webmFormat.getSupportedAudioCodecs();
+
+// Check subtitle support
+const mp4Subtitles = mp4Format.getSupportedSubtitleCodecs();
+```
+
+### Error handling for incompatible codecs
+
+Mediabunny will throw an error if you try to use an incompatible codec:
+
+```typescript
+import { Output, WebMOutputFormat, BufferTarget, VideoPacketSource } from 'mediabunny';
+
+const output = new Output({
+  format: new WebMOutputFormat(),
+  target: new BufferTarget()
+});
+
+const videoSource = new VideoPacketSource({
+  codec: 'avc', // H.264 - NOT supported in WebM!
+  width: 1920,
+  height: 1080
+});
+
+try {
+  output.addVideoTrack(videoSource);
+} catch (error) {
+  console.error(error.message);
+  // "Codec 'avc' cannot be contained within WebM. 
+  //  Supported video codecs are: 'vp8', 'vp9', 'av1'. 
+  //  Switching to MKV will grant support for this codec."
+}
+```
+
+<Tip>
+Mediabunny provides helpful error messages suggesting alternative formats when codec compatibility issues arise.
+</Tip>
+
+## Choosing the right format and codec
+
+Consider these factors when selecting formats and codecs:
+
+<CardGroup cols={2}>
+<Card title="Compatibility" icon="check">
+For maximum compatibility across devices and platforms, use MP4 with H.264 video and AAC audio.
+</Card>
+
+<Card title="Web Delivery" icon="globe">
+For web streaming, use WebM (VP9/Opus) or MP4 (H.264/AAC). Modern browsers support both.
+</Card>
+
+<Card title="Quality" icon="star">
+For high quality with efficient compression, use HEVC, VP9, or AV1 video codecs.
+</Card>
+
+<Card title="Open Source" icon="code">
+For open-source projects avoiding patent issues, use WebM, MKV, or Ogg with open codecs.
+</Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+<Card title="Input and Output" href="/concepts/input-output" icon="arrows-left-right">
+Learn how to read and write media files
+</Card>
+
+<Card title="Sources and Targets" href="/concepts/sources-and-targets" icon="database">
+Understand different ways to read and write data
+</Card>
+</CardGroup>

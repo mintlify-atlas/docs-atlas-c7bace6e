@@ -1,0 +1,234 @@
+---
+title: Audio sources
+description: Audio source classes for adding audio samples to output tracks
+---
+
+Audio sources are used to add audio samples to output audio tracks. All audio sources extend the base `AudioSource` class.
+
+## AudioBufferSource
+
+Converts `AudioBuffer` instances (from the Web Audio API) to audio samples, encodes them, and adds them to the output track.
+
+### Constructor
+
+```typescript
+new AudioBufferSource(encodingConfig: AudioEncodingConfig)
+```
+
+<ParamField path="encodingConfig" type="AudioEncodingConfig" required>
+  Configuration object that controls audio encoding.
+
+  <Expandable title="AudioEncodingConfig properties">
+    <ParamField path="codec" type="AudioCodec" required>
+      The audio codec for encoding. Common values: `'aac'`, `'opus'`, `'mp3'`, `'vorbis'`, `'flac'`, or various PCM codecs like `'pcm-s16le'`.
+    </ParamField>
+
+    <ParamField path="bitrate" type="number | Quality">
+      Target bitrate in bits per second, or a `Quality` object for subjective quality levels. Required for compressed audio codecs (like AAC, Opus, MP3), unused for PCM codecs.
+    </ParamField>
+
+    <ParamField path="bitrateMode" type="'constant' | 'variable'">
+      Bitrate encoding mode.
+    </ParamField>
+
+    <ParamField path="fullCodecString" type="string">
+      Full codec string from Mediabunny Codec Registry. Auto-constructed if not provided.
+    </ParamField>
+
+    <ParamField path="onEncodedPacket" type="(packet: EncodedPacket, meta?: EncodedAudioChunkMetadata) => unknown">
+      Callback for each successfully encoded packet.
+    </ParamField>
+
+    <ParamField path="onEncoderConfig" type="(config: AudioEncoderConfig) => unknown">
+      Callback when the internal WebCodecs encoder config is created.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Methods
+
+#### add
+
+Converts an AudioBuffer to audio samples, encodes them, and adds them to the output. The first AudioBuffer starts at timestamp 0, with subsequent buffers following the cumulative duration.
+
+```typescript
+add(audioBuffer: AudioBuffer): Promise<void>
+```
+
+<ParamField path="audioBuffer" type="AudioBuffer" required>
+  The AudioBuffer to convert and encode.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source, preventing future samples and signaling no more data will be added to this track.
+
+```typescript
+close(): void
+```
+
+<Note>
+Calling `close()` is optional but recommended after adding the last sample for improved performance and reduced memory usage.
+</Note>
+
+---
+
+## AudioSampleSource
+
+Adds raw, unencoded audio samples to an output audio track with automatic encoding.
+
+### Constructor
+
+```typescript
+new AudioSampleSource(encodingConfig: AudioEncodingConfig)
+```
+
+<ParamField path="encodingConfig" type="AudioEncodingConfig" required>
+  Configuration object that controls audio encoding. See [AudioBufferSource](#audiobuffersource) for detailed properties.
+</ParamField>
+
+### Methods
+
+#### add
+
+Encodes an audio sample and adds it to the output.
+
+```typescript
+add(audioSample: AudioSample): Promise<void>
+```
+
+<ParamField path="audioSample" type="AudioSample" required>
+  The audio sample to encode and add.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source. See [AudioBufferSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+---
+
+## EncodedAudioPacketSource
+
+Directly pipes pre-encoded audio packets into the output file without additional encoding.
+
+### Constructor
+
+```typescript
+new EncodedAudioPacketSource(codec: AudioCodec)
+```
+
+<ParamField path="codec" type="AudioCodec" required>
+  The codec used to encode the packets. Examples: `'aac'`, `'opus'`, `'mp3'`, `'vorbis'`, `'flac'`.
+</ParamField>
+
+### Methods
+
+#### add
+
+Adds an encoded packet to the output audio track. Packets must be added in **decode order**.
+
+```typescript
+add(
+  packet: EncodedPacket,
+  meta?: EncodedAudioChunkMetadata
+): Promise<void>
+```
+
+<ParamField path="packet" type="EncodedPacket" required>
+  The encoded audio packet to add. Cannot be a metadata-only packet.
+</ParamField>
+
+<ParamField path="meta" type="EncodedAudioChunkMetadata">
+  Additional encoder metadata. You should pass this for the first call, including a valid decoder config.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source. See [AudioBufferSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+---
+
+## MediaStreamAudioTrackSource
+
+Encodes data from a live `MediaStreamAudioTrack` (e.g., microphone or media element) and pipes it to the output. Audio is automatically captured once the connected Output is started.
+
+### Constructor
+
+```typescript
+new MediaStreamAudioTrackSource(
+  track: MediaStreamAudioTrack,
+  encodingConfig: AudioEncodingConfig
+)
+```
+
+<ParamField path="track" type="MediaStreamAudioTrack" required>
+  The audio MediaStreamTrack to capture audio from.
+</ParamField>
+
+<ParamField path="encodingConfig" type="AudioEncodingConfig" required>
+  Configuration object that controls audio encoding. See [AudioBufferSource](#audiobuffersource) for detailed properties.
+</ParamField>
+
+### Properties
+
+<ResponseField name="errorPromise" type="Promise<never>">
+  A promise that rejects upon any error within this source. This promise never resolves. You should handle this promise to catch internal errors.
+</ResponseField>
+
+<ResponseField name="paused" type="boolean">
+  Whether this source is currently paused as a result of calling `pause()`.
+</ResponseField>
+
+### Methods
+
+#### pause
+
+Pauses the capture of audio data. Audio data emitted by the media stream is ignored while paused. This does **not** close the underlying track.
+
+```typescript
+pause(): void
+```
+
+#### resume
+
+Resumes the capture of audio data after being paused.
+
+```typescript
+resume(): void
+```
+
+#### close
+
+Stops capturing and closes the source. See [AudioBufferSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+<Note>
+Make sure to handle the `errorPromise` field so that internal errors are properly surfaced.
+</Note>
+
+<Note>
+If `MediaStreamTrackProcessor` is not supported in the main thread, Mediabunny will attempt to use it in a Web Worker. If neither is available, an AudioContext fallback is used with the deprecated (but still functional) ScriptProcessorNode.
+</Note>

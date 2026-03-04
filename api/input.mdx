@@ -1,0 +1,166 @@
+---
+title: Input
+description: Read and process input media files
+---
+
+The `Input` class represents an input media file and provides methods for reading tracks, metadata, and computing file properties.
+
+## Constructor
+
+```typescript
+new Input(options: InputOptions)
+```
+
+Creates a new input file from the specified options. No reading operations will be performed until methods are called on this instance.
+
+<ParamField path="options" type="InputOptions" required>
+  Configuration for the input file
+  
+  <Expandable title="InputOptions properties">
+    <ParamField path="formats" type="InputFormat[]" required>
+      A list of supported formats. If the source file is not of one of these formats, then it cannot be read.
+    </ParamField>
+    
+    <ParamField path="source" type="Source" required>
+      The source from which data will be read.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="source" type="Source">
+  Returns the source from which this input file reads its data. This is the same source that was passed to the constructor.
+</ResponseField>
+
+<ResponseField name="disposed" type="boolean">
+  True if the input has been disposed.
+</ResponseField>
+
+## Methods
+
+### getFormat()
+
+```typescript
+async getFormat(): Promise<InputFormat>
+```
+
+Returns the format of the input file. You can compare this result directly to the InputFormat singletons or use `instanceof` checks for subset-aware logic (for example, `format instanceof MatroskaInputFormat` is true for both MKV and WebM).
+
+### computeDuration()
+
+```typescript
+async computeDuration(): Promise<number>
+```
+
+Computes the duration of the input file, in seconds. More precisely, returns the largest end timestamp among all tracks.
+
+### getFirstTimestamp()
+
+```typescript
+async getFirstTimestamp(): Promise<number>
+```
+
+Returns the timestamp at which the input file starts. More precisely, returns the smallest starting timestamp among all tracks.
+
+### getTracks()
+
+```typescript
+async getTracks(): Promise<InputTrack[]>
+```
+
+Returns the list of all tracks of this input file.
+
+### getVideoTracks()
+
+```typescript
+async getVideoTracks(): Promise<InputVideoTrack[]>
+```
+
+Returns the list of all video tracks of this input file.
+
+### getAudioTracks()
+
+```typescript
+async getAudioTracks(): Promise<InputAudioTrack[]>
+```
+
+Returns the list of all audio tracks of this input file.
+
+### getPrimaryVideoTrack()
+
+```typescript
+async getPrimaryVideoTrack(): Promise<InputVideoTrack | null>
+```
+
+Returns the primary video track of this input file, or null if there are no video tracks.
+
+### getPrimaryAudioTrack()
+
+```typescript
+async getPrimaryAudioTrack(): Promise<InputAudioTrack | null>
+```
+
+Returns the primary audio track of this input file, or null if there are no audio tracks.
+
+### getMimeType()
+
+```typescript
+async getMimeType(): Promise<string>
+```
+
+Returns the full MIME type of this input file, including track codecs.
+
+### getMetadataTags()
+
+```typescript
+async getMetadataTags(): Promise<MetadataTags>
+```
+
+Returns descriptive metadata tags about the media file, such as title, author, date, cover art, or other attached files.
+
+### dispose()
+
+```typescript
+dispose(): void
+```
+
+Disposes this input and frees connected resources. When an input is disposed, ongoing read operations will be canceled, all future read operations will fail, any open decoders will be closed, and all ongoing media sink operations will be canceled. Disallowed and canceled operations will throw an `InputDisposedError`.
+
+You are expected not to use an input after disposing it. While some operations may still work, it is not specified and may change in any future update.
+
+## Errors
+
+### InputDisposedError
+
+Thrown when an operation was prevented because the corresponding Input has been disposed.
+
+```typescript
+class InputDisposedError extends Error
+```
+
+## Example
+
+```typescript
+import { Input, FileSource, Mp4InputFormat, WebMInputFormat } from '@mediabunny/browser';
+
+const file = await fileInput.files[0];
+const source = new FileSource(file);
+const input = new Input({
+  formats: [Mp4InputFormat, WebMInputFormat],
+  source
+});
+
+const duration = await input.computeDuration();
+console.log(`Duration: ${duration} seconds`);
+
+const videoTrack = await input.getPrimaryVideoTrack();
+if (videoTrack) {
+  console.log(`Video: ${videoTrack.codedWidth}x${videoTrack.codedHeight}`);
+}
+
+const metadata = await input.getMetadataTags();
+console.log('Title:', metadata.title);
+
+input.dispose();
+```

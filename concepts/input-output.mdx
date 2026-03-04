@@ -1,0 +1,287 @@
+---
+title: Input and Output
+description: Learn how Input and Output classes work together to read and write media files
+---
+
+Mediabunny uses two core classes to handle media files: `Input` for reading and `Output` for writing. These classes work together to provide a complete media processing pipeline.
+
+## Input class
+
+The `Input` class represents an input media file and is the starting point for all read operations. It abstracts away the complexity of different file formats and provides a unified interface for reading media data.
+
+### Creating an Input
+
+To create an `Input`, you need to specify:
+- **formats**: An array of supported input formats (MP4, WebM, etc.)
+- **source**: Where to read the data from (file, URL, buffer, etc.)
+
+```typescript
+import { Input, MP4, WEBM, BlobSource } from 'mediabunny';
+
+const input = new Input({
+  formats: [MP4, WEBM],
+  source: new BlobSource(file)
+});
+```
+
+### Reading media data
+
+Once you have an `Input`, you can access its tracks and read packets:
+
+```typescript
+// Get all tracks
+const tracks = await input.getTracks();
+
+// Get specific track types
+const videoTracks = await input.getVideoTracks();
+const audioTracks = await input.getAudioTracks();
+
+// Get primary tracks
+const videoTrack = await input.getPrimaryVideoTrack();
+const audioTrack = await input.getPrimaryAudioTrack();
+
+// Read packets from a track
+for await (const packet of videoTrack.readPackets()) {
+  // Process packet
+}
+```
+
+### Input metadata
+
+The `Input` class provides access to file-level metadata:
+
+<CodeGroup>
+```typescript Format
+const format = await input.getFormat();
+console.log(format.name); // "MP4", "WebM", etc.
+```
+
+```typescript Duration
+const duration = await input.computeDuration();
+console.log(`Duration: ${duration} seconds`);
+```
+
+```typescript MIME Type
+const mimeType = await input.getMimeType();
+console.log(mimeType); // "video/mp4; codecs=\"avc1.64001f,mp4a.40.2\""
+```
+
+```typescript Tags
+const tags = await input.getMetadataTags();
+console.log(tags.title, tags.artist, tags.album);
+```
+</CodeGroup>
+
+### Disposing resources
+
+<Warning>
+Always dispose of `Input` objects when you're done to free resources:
+</Warning>
+
+```typescript
+input.dispose();
+
+// Or use explicit resource management (ECMAScript 2023)
+using input = new Input({ formats: [MP4], source });
+// Automatically disposed at end of scope
+```
+
+## Output class
+
+The `Output` class orchestrates the creation of new media files. It manages tracks, encoders, and writes the final output to a target destination.
+
+### Creating an Output
+
+To create an `Output`, specify:
+- **format**: The output format (MP4, WebM, etc.)
+- **target**: Where to write the data (buffer, stream, file, etc.)
+
+```typescript
+import { Output, Mp4OutputFormat, BufferTarget } from 'mediabunny';
+
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new BufferTarget()
+});
+```
+
+### Adding tracks
+
+Before starting an output, you must add tracks and configure their sources:
+
+<CodeGroup>
+```typescript Video Track
+import { VideoPacketSource } from 'mediabunny';
+
+const videoSource = new VideoPacketSource({
+  codec: 'avc',
+  width: 1920,
+  height: 1080
+});
+
+output.addVideoTrack(videoSource, {
+  rotation: 0,
+  frameRate: 30
+});
+```
+
+```typescript Audio Track
+import { AudioPacketSource } from 'mediabunny';
+
+const audioSource = new AudioPacketSource({
+  codec: 'aac',
+  sampleRate: 48000,
+  numberOfChannels: 2
+});
+
+output.addAudioTrack(audioSource, {
+  languageCode: 'eng',
+  name: 'English Audio'
+});
+```
+</CodeGroup>
+
+### Output lifecycle
+
+An `Output` follows a specific lifecycle:
+
+<Steps>
+<Step title="Create output">
+Instantiate the `Output` with a format and target.
+</Step>
+
+<Step title="Add tracks">
+Add video, audio, and subtitle tracks with their sources and metadata.
+</Step>
+
+<Step title="Start output">
+Call `start()` to begin accepting media data.
+
+```typescript
+await output.start();
+```
+</Step>
+
+<Step title="Add samples">
+Feed samples or packets to each track's source.
+
+```typescript
+videoSource.addPacket(packet);
+audioSource.addSample(sample);
+```
+</Step>
+
+<Step title="Finalize">
+Call `finalize()` when all media data has been added.
+
+```typescript
+await output.finalize();
+```
+</Step>
+</Steps>
+
+### Complete example
+
+Here's a complete example of reading from one file and writing to another:
+
+```typescript
+import { 
+  Input, Output, 
+  MP4, Mp4OutputFormat,
+  BlobSource, BufferTarget 
+} from 'mediabunny';
+
+// Create input
+const input = new Input({
+  formats: [MP4],
+  source: new BlobSource(inputFile)
+});
+
+// Create output
+const target = new BufferTarget();
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target
+});
+
+// Get input tracks
+const videoTrack = await input.getPrimaryVideoTrack();
+const audioTrack = await input.getPrimaryAudioTrack();
+
+// Create output sources from input tracks
+const videoSource = videoTrack.createPacketSource();
+const audioSource = audioTrack.createPacketSource();
+
+// Add tracks to output
+output.addVideoTrack(videoSource);
+output.addAudioTrack(audioSource);
+
+// Start output
+await output.start();
+
+// Copy packets from input to output
+await Promise.all([
+  (async () => {
+    for await (const packet of videoTrack.readPackets()) {
+      videoSource.addPacket(packet);
+    }
+  })(),
+  (async () => {
+    for await (const packet of audioTrack.readPackets()) {
+      audioSource.addPacket(packet);
+    }
+  })()
+]);
+
+// Finalize output
+await output.finalize();
+
+// Access the result
+const outputBuffer = target.buffer;
+
+// Clean up
+input.dispose();
+```
+
+## Input and Output together
+
+The power of Mediabunny comes from using `Input` and `Output` together:
+
+<CardGroup cols={2}>
+<Card title="Remuxing" icon="arrows-rotate">
+Copy media data from one container format to another without re-encoding.
+</Card>
+
+<Card title="Transcoding" icon="film">
+Decode media samples, process them, and re-encode to different codecs.
+</Card>
+
+<Card title="Editing" icon="scissors">
+Extract, trim, or combine media from multiple sources.
+</Card>
+
+<Card title="Analysis" icon="chart-line">
+Read media data to analyze quality, extract metadata, or generate previews.
+</Card>
+</CardGroup>
+
+## Error handling
+
+Both `Input` and `Output` can throw errors during operation:
+
+```typescript
+try {
+  const input = new Input({ formats: [MP4], source });
+  const format = await input.getFormat();
+} catch (error) {
+  if (error.message.includes('unsupported or unrecognizable format')) {
+    console.error('File format not supported');
+  } else if (error instanceof InputDisposedError) {
+    console.error('Input was disposed before operation completed');
+  }
+}
+```
+
+<Info>
+See the [Error Handling](/error-handling) guide for comprehensive error management strategies.
+</Info>

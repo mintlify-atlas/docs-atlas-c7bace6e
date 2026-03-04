@@ -1,0 +1,309 @@
+---
+title: Metadata
+description: Descriptive metadata tags for media files
+---
+
+## MetadataTags
+
+Represents descriptive (non-technical) metadata about a media file, such as title, author, date, cover art, or other attached files. Common tags are normalized by Mediabunny into a uniform format, while the `raw` field can be used to directly read or write the underlying metadata tags (which differ by format).
+
+```typescript
+type MetadataTags = {
+  title?: string;
+  description?: string;
+  artist?: string;
+  album?: string;
+  albumArtist?: string;
+  trackNumber?: number;
+  tracksTotal?: number;
+  discNumber?: number;
+  discsTotal?: number;
+  genre?: string;
+  date?: Date;
+  lyrics?: string;
+  comment?: string;
+  images?: AttachedImage[];
+  raw?: Record<string, string | Uint8Array | RichImageData | AttachedFile | null>;
+}
+```
+
+### Common Fields
+
+<ResponseField name="title" type="string">
+  Title of the media (e.g., "Gangnam Style", "Titanic").
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Short description or subtitle of the media.
+</ResponseField>
+
+<ResponseField name="artist" type="string">
+  Primary artist(s) or creator(s) of the work.
+</ResponseField>
+
+<ResponseField name="album" type="string">
+  Album, collection, or compilation the media belongs to.
+</ResponseField>
+
+<ResponseField name="albumArtist" type="string">
+  Main credited artist for the album/collection as a whole.
+</ResponseField>
+
+<ResponseField name="trackNumber" type="number">
+  Position of this track within its album or collection (1-based).
+</ResponseField>
+
+<ResponseField name="tracksTotal" type="number">
+  Total number of tracks in the album or collection.
+</ResponseField>
+
+<ResponseField name="discNumber" type="number">
+  Disc index if the release spans multiple discs (1-based).
+</ResponseField>
+
+<ResponseField name="discsTotal" type="number">
+  Total number of discs in the release.
+</ResponseField>
+
+<ResponseField name="genre" type="string">
+  Genre or category describing the media's style or content (e.g., "Metal", "Horror").
+</ResponseField>
+
+<ResponseField name="date" type="Date">
+  Release, recording or creation date of the media.
+</ResponseField>
+
+<ResponseField name="lyrics" type="string">
+  Full text lyrics or transcript associated with the media.
+</ResponseField>
+
+<ResponseField name="comment" type="string">
+  Freeform notes, remarks or commentary about the media.
+</ResponseField>
+
+<ResponseField name="images" type="AttachedImage[]">
+  Embedded images such as cover art, booklet scans, artwork or preview frames.
+</ResponseField>
+
+### Raw Format-Specific Metadata
+
+<ResponseField name="raw" type="Record<string, string | Uint8Array | RichImageData | AttachedFile | null>">
+  The raw, underlying metadata tags. This field can be used for both reading and writing.
+
+  The format of these tags differs per format:
+  - **MP4/QuickTime**: Keys refer to atom names in the `'ilst'` atom, or keys from the `'keys'` atom
+  - **WebM/Matroska**: `SimpleTag` elements with target 50 (MOVIE)
+  - **MP3/ADTS**: ID3v2 tags
+  - **Ogg**: Vorbis-style comment header key-value pairs
+  - **WAVE**: Individual chunks within the RIFF INFO chunk
+  - **FLAC**: Vorbis-style comment block key-value pairs
+  - **MPEG-TS**: Not supported
+</ResponseField>
+
+## AttachedImage
+
+An embedded image such as cover art, booklet scan, artwork or preview frame.
+
+```typescript
+type AttachedImage = {
+  data: Uint8Array;
+  mimeType: string;
+  kind: 'coverFront' | 'coverBack' | 'unknown';
+  name?: string;
+  description?: string;
+}
+```
+
+<ResponseField name="data" type="Uint8Array">
+  The raw image data.
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  An RFC 6838 MIME type (e.g., `'image/jpeg'`, `'image/png'`).
+</ResponseField>
+
+<ResponseField name="kind" type="'coverFront' | 'coverBack' | 'unknown'">
+  The kind or purpose of the image.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The name of the image file.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  A description of the image.
+</ResponseField>
+
+## RichImageData
+
+Image data with additional metadata. Used in raw metadata fields.
+
+```typescript
+class RichImageData {
+  constructor(
+    public data: Uint8Array,
+    public mimeType: string
+  )
+}
+```
+
+<ParamField path="data" type="Uint8Array" required>
+  The raw image data.
+</ParamField>
+
+<ParamField path="mimeType" type="string" required>
+  An RFC 6838 MIME type (e.g., `'image/jpeg'`, `'image/png'`).
+</ParamField>
+
+## AttachedFile
+
+A file attached to a media file (e.g., fonts, subtitle files).
+
+```typescript
+class AttachedFile {
+  constructor(
+    public data: Uint8Array,
+    public mimeType?: string,
+    public name?: string,
+    public description?: string
+  )
+}
+```
+
+<ParamField path="data" type="Uint8Array" required>
+  The raw file data.
+</ParamField>
+
+<ParamField path="mimeType" type="string">
+  An RFC 6838 MIME type (e.g., `'font/ttf'`, `'application/x-subrip'`).
+</ParamField>
+
+<ParamField path="name" type="string">
+  The name of the file.
+</ParamField>
+
+<ParamField path="description" type="string">
+  A description of the file.
+</ParamField>
+
+## TrackDisposition
+
+Specifies a track's disposition, i.e. information about its intended usage.
+
+```typescript
+type TrackDisposition = {
+  default: boolean;
+  forced: boolean;
+  original: boolean;
+  commentary: boolean;
+  hearingImpaired: boolean;
+  visuallyImpaired: boolean;
+}
+```
+
+<ResponseField name="default" type="boolean">
+  Indicates that this track is eligible for automatic selection by a player; that it is the main track among other, non-default tracks of the same type.
+</ResponseField>
+
+<ResponseField name="forced" type="boolean">
+  Indicates that players should always display this track by default, even if it goes against the user's default preferences. For example, a subtitle track only containing translations of foreign-language audio.
+</ResponseField>
+
+<ResponseField name="original" type="boolean">
+  Indicates that this track is in the content's original language.
+</ResponseField>
+
+<ResponseField name="commentary" type="boolean">
+  Indicates that this track contains commentary.
+</ResponseField>
+
+<ResponseField name="hearingImpaired" type="boolean">
+  Indicates that this track is intended for hearing-impaired users.
+</ResponseField>
+
+<ResponseField name="visuallyImpaired" type="boolean">
+  Indicates that this track is intended for visually-impaired users.
+</ResponseField>
+
+## Examples
+
+### Reading metadata
+
+```typescript
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+
+const input = new Input({
+  source: new BlobSource(file),
+  formats: ALL_FORMATS
+});
+
+const tags = await input.getMetadataTags();
+
+console.log(`Title: ${tags.title}`);
+console.log(`Artist: ${tags.artist}`);
+console.log(`Album: ${tags.album}`);
+console.log(`Date: ${tags.date?.toISOString()}`);
+
+if (tags.images && tags.images.length > 0) {
+  const coverArt = tags.images[0];
+  console.log(`Cover art: ${coverArt.mimeType}, ${coverArt.data.byteLength} bytes`);
+  
+  // Display the cover art
+  const blob = new Blob([coverArt.data], { type: coverArt.mimeType });
+  const url = URL.createObjectURL(blob);
+  document.getElementById('cover-art').src = url;
+}
+```
+
+### Writing metadata
+
+```typescript
+import { Output, Mp4OutputFormat, BufferTarget } from 'mediabunny';
+
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new BufferTarget()
+});
+
+// Set metadata tags
+await output.setMetadataTags({
+  title: 'My Video',
+  artist: 'John Doe',
+  album: 'Demo Album',
+  date: new Date('2024-01-01'),
+  genre: 'Electronic',
+  comment: 'Created with Mediabunny',
+  images: [
+    {
+      data: coverArtData,
+      mimeType: 'image/jpeg',
+      kind: 'coverFront',
+      description: 'Album cover'
+    }
+  ]
+});
+
+// Add tracks and finalize...
+```
+
+### Format-specific raw metadata
+
+```typescript
+// Write custom MP4 metadata
+await output.setMetadataTags({
+  title: 'My Video',
+  raw: {
+    // Custom iTunes-style metadata
+    'com.apple.quicktime.version': '1.0',
+    'com.apple.quicktime.author': 'John Doe',
+    // Custom atom in udta
+    '©xyz': new TextEncoder().encode('GPS coordinates')
+  }
+});
+```
+
+## See also
+
+- [Reading metadata guide](/guides/metadata) - Complete guide to working with metadata
+- [Input.getMetadataTags()](/api/input#getmetadatatags) - Read metadata from files
+- [Output.setMetadataTags()](/api/output#setmetadatatags) - Write metadata to files

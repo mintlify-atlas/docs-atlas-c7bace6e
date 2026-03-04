@@ -1,0 +1,204 @@
+---
+title: Codecs
+description: Codec types and constants for video, audio, and subtitle media
+---
+
+## Overview
+
+Mediabunny provides comprehensive codec support through type definitions and constants for video, audio, and subtitle formats.
+
+## Types
+
+### MediaCodec
+
+Union type of all known media codecs (video, audio, and subtitle).
+
+```typescript
+type MediaCodec = VideoCodec | AudioCodec | SubtitleCodec;
+```
+
+### VideoCodec
+
+Union type of all known video codecs.
+
+```typescript
+type VideoCodec = typeof VIDEO_CODECS[number];
+```
+
+**Possible values:**
+- `'avc'` - H.264/AVC
+- `'hevc'` - H.265/HEVC
+- `'vp9'` - VP9
+- `'av1'` - AV1
+- `'vp8'` - VP8
+
+### AudioCodec
+
+Union type of all known audio codecs.
+
+```typescript
+type AudioCodec = typeof AUDIO_CODECS[number];
+```
+
+**Possible values:**
+- Compressed codecs: `'aac'`, `'opus'`, `'mp3'`, `'vorbis'`, `'flac'`, `'ac3'`, `'eac3'`
+- PCM codecs: `'pcm-s16'`, `'pcm-s16be'`, `'pcm-s24'`, `'pcm-s24be'`, `'pcm-s32'`, `'pcm-s32be'`, `'pcm-f32'`, `'pcm-f32be'`, `'pcm-f64'`, `'pcm-f64be'`, `'pcm-u8'`, `'pcm-s8'`, `'ulaw'`, `'alaw'`
+
+### SubtitleCodec
+
+Union type of all known subtitle codecs.
+
+```typescript
+type SubtitleCodec = typeof SUBTITLE_CODECS[number];
+```
+
+**Possible values:**
+- `'webvtt'` - WebVTT subtitles
+
+## Constants
+
+### VIDEO_CODECS
+
+List of known video codecs, ordered by encoding preference.
+
+```typescript
+const VIDEO_CODECS: readonly ["avc", "hevc", "vp9", "av1", "vp8"];
+```
+
+**Source:** codec.ts:34
+
+### AUDIO_CODECS
+
+List of known audio codecs, ordered by encoding preference.
+
+```typescript
+const AUDIO_CODECS: readonly [
+  "aac", "opus", "mp3", "vorbis", "flac", "ac3", "eac3",
+  "pcm-s16", "pcm-s16be", "pcm-s24", "pcm-s24be",
+  "pcm-s32", "pcm-s32be", "pcm-f32", "pcm-f32be",
+  "pcm-f64", "pcm-f64be", "pcm-u8", "pcm-s8",
+  "ulaw", "alaw"
+];
+```
+
+**Source:** codec.ts:81
+
+### PCM_AUDIO_CODECS
+
+List of known PCM (uncompressed) audio codecs, ordered by encoding preference.
+
+```typescript
+const PCM_AUDIO_CODECS: readonly [
+  "pcm-s16", "pcm-s16be", "pcm-s24", "pcm-s24be",
+  "pcm-s32", "pcm-s32be", "pcm-f32", "pcm-f32be",
+  "pcm-f64", "pcm-f64be", "pcm-u8", "pcm-s8",
+  "ulaw", "alaw"
+];
+```
+
+**Source:** codec.ts:46
+
+### NON_PCM_AUDIO_CODECS
+
+List of known compressed audio codecs, ordered by encoding preference.
+
+```typescript
+const NON_PCM_AUDIO_CODECS: readonly [
+  "aac", "opus", "mp3", "vorbis", "flac", "ac3", "eac3"
+];
+```
+
+**Source:** codec.ts:67
+
+### SUBTITLE_CODECS
+
+List of known subtitle codecs, ordered by encoding preference.
+
+```typescript
+const SUBTITLE_CODECS: readonly ["webvtt"];
+```
+
+**Source:** codec.ts:90
+
+## Codec details
+
+### Video codecs
+
+<AccordionGroup>
+  <Accordion title="avc (H.264/AVC)">
+    Advanced Video Coding, widely supported baseline codec. Good for compatibility.
+    
+    **Encoding preference:** 1st (highest)
+  </Accordion>
+  
+  <Accordion title="hevc (H.265/HEVC)">
+    High Efficiency Video Coding. ~40% more efficient than AVC.
+    
+    **Encoding preference:** 2nd
+  </Accordion>
+  
+  <Accordion title="vp9">
+    VP9 codec. Similar efficiency to HEVC, commonly used for web video.
+    
+    **Encoding preference:** 3rd
+  </Accordion>
+  
+  <Accordion title="av1">
+    AV1 codec. ~60% more efficient than AVC, royalty-free.
+    
+    **Encoding preference:** 4th
+  </Accordion>
+  
+  <Accordion title="vp8">
+    VP8 codec. Slightly less efficient than AVC.
+    
+    **Encoding preference:** 5th (lowest)
+  </Accordion>
+</AccordionGroup>
+
+### Audio codecs
+
+<AccordionGroup>
+  <Accordion title="Compressed audio codecs">
+    - **aac**: Advanced Audio Coding, widely supported
+    - **opus**: Modern codec optimized for interactive speech and music
+    - **mp3**: MPEG-1 Audio Layer 3, legacy but universally supported
+    - **vorbis**: Open-source alternative to AAC
+    - **flac**: Free Lossless Audio Codec
+    - **ac3**: Dolby Digital (AC-3)
+    - **eac3**: Enhanced AC-3 (Dolby Digital Plus)
+  </Accordion>
+  
+  <Accordion title="PCM audio codecs">
+    Uncompressed pulse-code modulation formats:
+    - **pcm-s16/pcm-s16be**: 16-bit signed (little/big endian)
+    - **pcm-s24/pcm-s24be**: 24-bit signed (little/big endian)
+    - **pcm-s32/pcm-s32be**: 32-bit signed (little/big endian)
+    - **pcm-f32/pcm-f32be**: 32-bit float (little/big endian)
+    - **pcm-f64/pcm-f64be**: 64-bit float (little/big endian)
+    - **pcm-u8**: 8-bit unsigned
+    - **pcm-s8**: 8-bit signed
+    - **ulaw**: μ-law encoding
+    - **alaw**: A-law encoding
+  </Accordion>
+</AccordionGroup>
+
+## Usage example
+
+```typescript
+import { VIDEO_CODECS, AUDIO_CODECS, type VideoCodec } from 'mediabunny';
+
+// Check if a codec is supported
+const codec: VideoCodec = 'avc';
+if (VIDEO_CODECS.includes(codec)) {
+  console.log('Codec is supported');
+}
+
+// Iterate through all video codecs
+for (const codec of VIDEO_CODECS) {
+  console.log(`Video codec: ${codec}`);
+}
+
+// Work with audio codecs
+const audioCodec = AUDIO_CODECS[0]; // 'aac'
+```

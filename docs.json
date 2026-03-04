@@ -1,122 +1,132 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Mediabunny",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#FF6B9D",
+    "light": "#FF6B9D",
+    "dark": "#FF6B9D"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/Vanilagy/mediabunny"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Vanilagy/mediabunny"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/input-output",
+              "concepts/formats-and-codecs",
+              "concepts/packets-and-samples",
+              "concepts/sources-and-targets"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/reading-files",
+              "guides/writing-files",
+              "guides/converting-files",
+              "guides/metadata",
+              "guides/streaming"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Advanced",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "advanced/media-sources",
+              "advanced/media-sinks",
+              "advanced/custom-coders",
+              "advanced/performance"
+            ]
+          },
+          {
+            "group": "Extensions",
+            "pages": [
+              "extensions/mp3-encoder",
+              "extensions/ac3"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Input/Output",
             "pages": [
-              "api-reference/introduction"
+              "api/input",
+              "api/output",
+              "api/input-track",
+              "api/conversion"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Formats",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/input-formats",
+              "api/output-formats"
+            ]
+          },
+          {
+            "group": "Sources & Targets",
+            "pages": [
+              "api/sources",
+              "api/targets"
+            ]
+          },
+          {
+            "group": "Media Sources",
+            "pages": [
+              "api/media-sources/video-sources",
+              "api/media-sources/audio-sources",
+              "api/media-sources/subtitle-sources"
+            ]
+          },
+          {
+            "group": "Media Sinks",
+            "pages": [
+              "api/media-sinks/video-sinks",
+              "api/media-sinks/audio-sinks"
+            ]
+          },
+          {
+            "group": "Data Types",
+            "pages": [
+              "api/packets",
+              "api/samples",
+              "api/metadata"
+            ]
+          },
+          {
+            "group": "Encoding",
+            "pages": [
+              "api/codecs",
+              "api/encoding",
+              "api/custom-coders"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

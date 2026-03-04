@@ -1,0 +1,351 @@
+---
+title: Conversion
+description: Convert media files with transcoding, resizing, and transformation options
+---
+
+The `Conversion` class provides a high-level API for converting one media file into another. It supports transcoding, resizing, rotating, trimming, and processing video and audio tracks.
+
+## Static methods
+
+### Conversion.init()
+
+```typescript
+static async init(options: ConversionOptions): Promise<Conversion>
+```
+
+Initializes a new conversion process without starting the conversion. This method analyzes the input file, determines which tracks can be converted, and prepares the output configuration.
+
+<ParamField path="options" type="ConversionOptions" required>
+  Configuration for the conversion
+  
+  <Expandable title="ConversionOptions properties">
+    <ParamField path="input" type="Input" required>
+      The input file.
+    </ParamField>
+    
+    <ParamField path="output" type="Output" required>
+      The output file.
+    </ParamField>
+    
+    <ParamField path="video" type="ConversionVideoOptions | Function">
+      Video-specific options. When passing an object, the same options are applied to all video tracks. When passing a function, it will be invoked for each video track and is expected to return the options for that specific track.
+    </ParamField>
+    
+    <ParamField path="audio" type="ConversionAudioOptions | Function">
+      Audio-specific options. When passing an object, the same options are applied to all audio tracks. When passing a function, it will be invoked for each audio track and is expected to return the options for that specific track.
+    </ParamField>
+    
+    <ParamField path="trim" type="object">
+      Options to trim the input file
+      
+      <Expandable title="Trim options">
+        <ParamField path="start" type="number">
+          The time in the input file in seconds at which the output file should start. When omitted, defaults to the start timestamp of the input or to 0, whichever is higher.
+        </ParamField>
+        
+        <ParamField path="end" type="number">
+          The time in the input file in seconds at which the output file should end. Defaults to the duration of the input when omitted.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="tags" type="MetadataTags | Function">
+      An object or a callback that returns metadata tags that should be written to the output file. If a function is passed, it will be passed the tags of the input file as its first argument. If not set, the input's metadata tags will be copied to the output.
+    </ParamField>
+    
+    <ParamField path="showWarnings" type="boolean" default="true">
+      Whether to show potential console warnings about discarded tracks after calling `Conversion.init()`.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Properties
+
+<ResponseField name="input" type="Input">
+  The input file.
+</ResponseField>
+
+<ResponseField name="output" type="Output">
+  The output file.
+</ResponseField>
+
+<ResponseField name="isValid" type="boolean">
+  Whether this conversion, as it has been configured, is valid and can be executed. If this field is false, check the `discardedTracks` field for reasons.
+</ResponseField>
+
+<ResponseField name="utilizedTracks" type="InputTrack[]">
+  The list of tracks that are included in the output file.
+</ResponseField>
+
+<ResponseField name="discardedTracks" type="DiscardedTrack[]">
+  The list of tracks from the input file that have been discarded, alongside the discard reason.
+  
+  <Expandable title="DiscardedTrack properties">
+    <ResponseField name="track" type="InputTrack">
+      The track that was discarded.
+    </ResponseField>
+    
+    <ResponseField name="reason" type="string">
+      The reason for discarding the track:
+      - `'discarded_by_user'`: You discarded this track by setting `discard: true`.
+      - `'max_track_count_reached'`: The output had no more room for another track.
+      - `'max_track_count_of_type_reached'`: The output had no more room for another track of this type.
+      - `'unknown_source_codec'`: We don't know the codec of the input track.
+      - `'undecodable_source_codec'`: The input track's codec cannot be decoded.
+      - `'no_encodable_target_codec'`: We can't find a codec that we can encode and that can be contained within the output format.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="onProgress" type="(progress: number) => unknown">
+  A callback that is fired whenever the conversion progresses. Returns a number between 0 and 1, indicating the completion of the conversion. Must be set before `execute()` is called for progress to be computed.
+</ResponseField>
+
+## Methods
+
+### execute()
+
+```typescript
+async execute(): Promise<void>
+```
+
+Executes the conversion process. Resolves once conversion is complete.
+
+Will throw if `isValid` is `false`.
+
+### cancel()
+
+```typescript
+async cancel(): Promise<void>
+```
+
+Cancels the conversion process, causing any ongoing `execute` call to throw a `ConversionCanceledError`. Does nothing if the conversion is already complete.
+
+## Video options
+
+### ConversionVideoOptions
+
+<ParamField path="discard" type="boolean">
+  If `true`, all video tracks will be discarded and will not be present in the output.
+</ParamField>
+
+<ParamField path="width" type="number">
+  The desired width of the output video in pixels, defaulting to the video's natural display width. If height is not set, it will be deduced automatically based on aspect ratio.
+</ParamField>
+
+<ParamField path="height" type="number">
+  The desired height of the output video in pixels, defaulting to the video's natural display height. If width is not set, it will be deduced automatically based on aspect ratio.
+</ParamField>
+
+<ParamField path="fit" type="'fill' | 'contain' | 'cover'">
+  The fitting algorithm in case both width and height are set:
+  - `'fill'` will stretch the image to fill the entire box, potentially altering aspect ratio.
+  - `'contain'` will contain the entire image within the box while preserving aspect ratio. This may lead to letterboxing.
+  - `'cover'` will scale the image until the entire box is filled, while preserving aspect ratio.
+</ParamField>
+
+<ParamField path="rotate" type="Rotation">
+  The angle in degrees to rotate the input video by, clockwise. Must be 0, 90, 180, or 270. Rotation is applied before cropping and resizing. This rotation is in addition to the natural rotation of the input video.
+</ParamField>
+
+<ParamField path="allowRotationMetadata" type="boolean" default="true">
+  When enabled, Mediabunny will use the rotation metadata in the output file to perform video rotation whenever possible. Set this field to `false` if you want to ensure the output file does not make use of rotation metadata.
+</ParamField>
+
+<ParamField path="crop" type="object">
+  Specifies the rectangular region of the input video to crop to
+  
+  <Expandable title="Crop properties">
+    <ParamField path="left" type="number">
+      The distance in pixels from the left edge of the source frame to the left edge of the crop rectangle.
+    </ParamField>
+    
+    <ParamField path="top" type="number">
+      The distance in pixels from the top edge of the source frame to the top edge of the crop rectangle.
+    </ParamField>
+    
+    <ParamField path="width" type="number">
+      The width in pixels of the crop rectangle.
+    </ParamField>
+    
+    <ParamField path="height" type="number">
+      The height in pixels of the crop rectangle.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="frameRate" type="number">
+  The desired frame rate of the output video, in hertz. If not specified, the original input frame rate will be used (which may be variable).
+</ParamField>
+
+<ParamField path="codec" type="VideoCodec">
+  The desired output video codec.
+</ParamField>
+
+<ParamField path="bitrate" type="number | Quality">
+  The desired bitrate of the output video.
+</ParamField>
+
+<ParamField path="alpha" type="'discard' | 'keep'" default="'discard'">
+  Whether to discard or keep the transparency information of the input video. Note that for `'keep'` to produce a transparent video, you must use an output config that supports it, such as WebM with VP9.
+</ParamField>
+
+<ParamField path="keyFrameInterval" type="number" default="5">
+  The interval, in seconds, of how often frames are encoded as a key frame. Frequent key frames improve seeking behavior but increase file size.
+</ParamField>
+
+<ParamField path="hardwareAcceleration" type="'no-preference' | 'prefer-hardware' | 'prefer-software'" default="'no-preference'">
+  A hint that configures the hardware acceleration method used when transcoding.
+</ParamField>
+
+<ParamField path="forceTranscode" type="boolean">
+  When `true`, video will always be re-encoded instead of directly copying over the encoded samples.
+</ParamField>
+
+<ParamField path="process" type="Function">
+  Allows for custom user-defined processing of video frames, e.g. for applying overlays, color transformations, or timestamp modifications. Will be called for each input video sample after transformations and frame rate corrections.
+</ParamField>
+
+<ParamField path="processedWidth" type="number">
+  An optional hint specifying the width of video samples returned by the `process` function, for better encoder configuration.
+</ParamField>
+
+<ParamField path="processedHeight" type="number">
+  An optional hint specifying the height of video samples returned by the `process` function, for better encoder configuration.
+</ParamField>
+
+## Audio options
+
+### ConversionAudioOptions
+
+<ParamField path="discard" type="boolean">
+  If `true`, all audio tracks will be discarded and will not be present in the output.
+</ParamField>
+
+<ParamField path="numberOfChannels" type="number">
+  The desired channel count of the output audio.
+</ParamField>
+
+<ParamField path="sampleRate" type="number">
+  The desired sample rate of the output audio, in hertz.
+</ParamField>
+
+<ParamField path="codec" type="AudioCodec">
+  The desired output audio codec.
+</ParamField>
+
+<ParamField path="bitrate" type="number | Quality">
+  The desired bitrate of the output audio.
+</ParamField>
+
+<ParamField path="forceTranscode" type="boolean">
+  When `true`, audio will always be re-encoded instead of directly copying over the encoded samples.
+</ParamField>
+
+<ParamField path="process" type="Function">
+  Allows for custom user-defined processing of audio samples, e.g. for applying audio effects, transformations, or timestamp modifications. Will be called for each input audio sample after remixing and resampling.
+</ParamField>
+
+<ParamField path="processedNumberOfChannels" type="number">
+  An optional hint specifying the channel count of audio samples returned by the `process` function, for better encoder configuration.
+</ParamField>
+
+<ParamField path="processedSampleRate" type="number">
+  An optional hint specifying the sample rate of audio samples returned by the `process` function, for better encoder configuration.
+</ParamField>
+
+## Example
+
+```typescript
+import { Conversion, Input, Output, FileSource, StreamTarget } from '@mediabunny/browser';
+import { Mp4InputFormat, Mp4OutputFormat } from '@mediabunny/browser';
+
+const input = new Input({
+  formats: [Mp4InputFormat],
+  source: new FileSource(inputFile)
+});
+
+const output = new Output({
+  format: Mp4OutputFormat,
+  target: new StreamTarget()
+});
+
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: {
+    width: 1280,
+    height: 720,
+    fit: 'contain',
+    codec: 'avc',
+    bitrate: 2_000_000,
+    frameRate: 30
+  },
+  audio: {
+    codec: 'aac',
+    bitrate: 128_000,
+    sampleRate: 48000,
+    numberOfChannels: 2
+  },
+  trim: {
+    start: 10,
+    end: 60
+  },
+  tags: (inputTags) => ({
+    ...inputTags,
+    title: 'Converted Video'
+  })
+});
+
+if (!conversion.isValid) {
+  console.error('Conversion is invalid:', conversion.discardedTracks);
+  return;
+}
+
+conversion.onProgress = (progress) => {
+  console.log(`Progress: ${(progress * 100).toFixed(1)}%`);
+};
+
+try {
+  await conversion.execute();
+  console.log('Conversion complete!');
+} catch (error) {
+  console.error('Conversion failed:', error);
+}
+```
+
+## Per-track options
+
+You can provide different options for each track by passing a function instead of an object:
+
+```typescript
+const conversion = await Conversion.init({
+  input,
+  output,
+  video: (track, n) => {
+    if (track.number === 1) {
+      // Main video track - high quality
+      return {
+        width: 1920,
+        height: 1080,
+        bitrate: 5_000_000
+      };
+    } else {
+      // Additional tracks - lower quality
+      return {
+        width: 1280,
+        height: 720,
+        bitrate: 2_000_000
+      };
+    }
+  },
+  audio: (track, n) => {
+    if (track.languageCode === 'eng') {
+      return { codec: 'aac', bitrate: 192_000 };
+    } else {
+      // Discard non-English audio tracks
+      return { discard: true };
+    }
+  }
+});
+```

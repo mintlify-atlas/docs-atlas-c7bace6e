@@ -1,0 +1,282 @@
+---
+title: Input tracks
+description: Access media track information and read packets from input files
+---
+
+Input tracks represent individual media streams (video, audio) within an input file. They provide access to track properties, codec information, and methods for reading encoded packets or decoded samples.
+
+## InputTrack
+
+Base class representing a media track in an input file.
+
+### Properties
+
+<ResponseField name="input" type="Input">
+  The input file this track belongs to.
+</ResponseField>
+
+<ResponseField name="type" type="TrackType">
+  The type of the track ('video', 'audio', or 'subtitle').
+</ResponseField>
+
+<ResponseField name="codec" type="MediaCodec | null">
+  The codec of the track's packets.
+</ResponseField>
+
+<ResponseField name="id" type="number">
+  The unique ID of this track in the input file.
+</ResponseField>
+
+<ResponseField name="number" type="number">
+  The 1-based index of this track among all tracks of the same type in the input file. For example, the first video track has number 1, the second video track has number 2, and so on.
+</ResponseField>
+
+<ResponseField name="internalCodecId" type="string | number | Uint8Array | null">
+  The identifier of the codec used internally by the container. It is not homogenized by Mediabunny and depends entirely on the container format.
+  
+  - For ISOBMFF files, this field returns the name of the Sample Description Box (e.g. `'avc1'`).
+  - For Matroska files, this field returns the value of the `CodecID` element.
+  - For WAVE files, this field returns the value of the format tag in the `'fmt '` chunk.
+  - For ADTS files, this field contains the `MPEG-4 Audio Object Type`.
+  - For MPEG-TS files, this field contains the `streamType` value from the Program Map Table.
+  - In all other cases, this field is `null`.
+</ResponseField>
+
+<ResponseField name="languageCode" type="string">
+  The ISO 639-2/T language code for this track. If the language is unknown, this field is `'und'` (undetermined).
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  A user-defined name for this track.
+</ResponseField>
+
+<ResponseField name="timeResolution" type="number">
+  A positive number x such that all timestamps and durations of all packets of this track are integer multiples of 1/x.
+</ResponseField>
+
+<ResponseField name="disposition" type="TrackDisposition">
+  The track's disposition, i.e. information about its intended usage.
+</ResponseField>
+
+### Methods
+
+#### getFirstTimestamp()
+
+```typescript
+async getFirstTimestamp(): Promise<number>
+```
+
+Returns the start timestamp of the first packet of this track, in seconds. While often near zero, this value may be positive or even negative. A negative starting timestamp means the track's timing has been offset. Samples with a negative timestamp should not be presented.
+
+#### computeDuration()
+
+```typescript
+async computeDuration(): Promise<number>
+```
+
+Returns the end timestamp of the last packet of this track, in seconds.
+
+#### getCodecParameterString()
+
+```typescript
+async getCodecParameterString(): Promise<string | null>
+```
+
+Returns the full codec parameter string for this track.
+
+#### canDecode()
+
+```typescript
+async canDecode(): Promise<boolean>
+```
+
+Checks if this track's packets can be decoded by the browser.
+
+#### determinePacketType()
+
+```typescript
+async determinePacketType(packet: EncodedPacket): Promise<PacketType | null>
+```
+
+For a given packet of this track, this method determines the actual type of this packet (key/delta) by looking into its bitstream. Returns null if the type couldn't be determined.
+
+#### computePacketStats()
+
+```typescript
+async computePacketStats(targetPacketCount?: number): Promise<PacketStats>
+```
+
+Computes aggregate packet statistics for this track, such as average packet rate or bitrate.
+
+<ParamField path="targetPacketCount" type="number">
+  Optional parameter that sets a target for how many packets this method must have looked at before it can return early. This means you can use it to aggregate only a subset (prefix) of all packets. This is very useful for getting a great estimate of video frame rate without having to scan through the entire file.
+</ParamField>
+
+<ResponseField name="return" type="PacketStats">
+  <Expandable title="PacketStats properties">
+    <ResponseField name="packetCount" type="number">
+      The total number of packets.
+    </ResponseField>
+    
+    <ResponseField name="averagePacketRate" type="number">
+      The average number of packets per second. For video tracks, this will equal the average frame rate (FPS).
+    </ResponseField>
+    
+    <ResponseField name="averageBitrate" type="number">
+      The average number of bits per second.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### isVideoTrack()
+
+```typescript
+isVideoTrack(): this is InputVideoTrack
+```
+
+Returns true if and only if this track is a video track.
+
+#### isAudioTrack()
+
+```typescript
+isAudioTrack(): this is InputAudioTrack
+```
+
+Returns true if and only if this track is an audio track.
+
+## InputVideoTrack
+
+Represents a video track in an input file. Extends `InputTrack` with video-specific properties and methods.
+
+### Properties
+
+<ResponseField name="codec" type="VideoCodec | null">
+  The video codec of this track.
+</ResponseField>
+
+<ResponseField name="codedWidth" type="number">
+  The width in pixels of the track's coded samples, before any transformations or rotations.
+</ResponseField>
+
+<ResponseField name="codedHeight" type="number">
+  The height in pixels of the track's coded samples, before any transformations or rotations.
+</ResponseField>
+
+<ResponseField name="rotation" type="Rotation">
+  The angle in degrees by which the track's frames should be rotated (clockwise). Can be 0, 90, 180, or 270.
+</ResponseField>
+
+<ResponseField name="pixelAspectRatio" type="Rational">
+  The pixel aspect ratio of the track's frames, as a rational number in its reduced form. Most videos use square pixels (1:1).
+</ResponseField>
+
+<ResponseField name="squarePixelWidth" type="number">
+  The width of the track's frames in square pixels, adjusted for pixel aspect ratio but before rotation.
+</ResponseField>
+
+<ResponseField name="squarePixelHeight" type="number">
+  The height of the track's frames in square pixels, adjusted for pixel aspect ratio but before rotation.
+</ResponseField>
+
+<ResponseField name="displayWidth" type="number">
+  The display width of the track's frames in pixels, after aspect ratio adjustment and rotation.
+</ResponseField>
+
+<ResponseField name="displayHeight" type="number">
+  The display height of the track's frames in pixels, after aspect ratio adjustment and rotation.
+</ResponseField>
+
+### Methods
+
+#### getColorSpace()
+
+```typescript
+async getColorSpace(): Promise<VideoColorSpaceInit>
+```
+
+Returns the color space of the track's samples.
+
+#### hasHighDynamicRange()
+
+```typescript
+async hasHighDynamicRange(): Promise<boolean>
+```
+
+If this method returns true, the track's samples use a high dynamic range (HDR).
+
+#### canBeTransparent()
+
+```typescript
+async canBeTransparent(): Promise<boolean>
+```
+
+Checks if this track may contain transparent samples with alpha data.
+
+#### getDecoderConfig()
+
+```typescript
+async getDecoderConfig(): Promise<VideoDecoderConfig | null>
+```
+
+Returns the [decoder configuration](https://www.w3.org/TR/webcodecs/#video-decoder-config) for decoding the track's packets using a [`VideoDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder). Returns null if the track's codec is unknown.
+
+## InputAudioTrack
+
+Represents an audio track in an input file. Extends `InputTrack` with audio-specific properties and methods.
+
+### Properties
+
+<ResponseField name="codec" type="AudioCodec | null">
+  The audio codec of this track.
+</ResponseField>
+
+<ResponseField name="numberOfChannels" type="number">
+  The number of audio channels in the track.
+</ResponseField>
+
+<ResponseField name="sampleRate" type="number">
+  The track's audio sample rate in hertz.
+</ResponseField>
+
+### Methods
+
+#### getDecoderConfig()
+
+```typescript
+async getDecoderConfig(): Promise<AudioDecoderConfig | null>
+```
+
+Returns the [decoder configuration](https://www.w3.org/TR/webcodecs/#audio-decoder-config) for decoding the track's packets using an [`AudioDecoder`](https://developer.mozilla.org/en-US/docs/Web/API/AudioDecoder). Returns null if the track's codec is unknown.
+
+## Example
+
+```typescript
+import { Input, FileSource, Mp4InputFormat } from '@mediabunny/browser';
+
+const input = new Input({
+  formats: [Mp4InputFormat],
+  source: new FileSource(file)
+});
+
+const videoTrack = await input.getPrimaryVideoTrack();
+if (videoTrack) {
+  console.log(`Codec: ${videoTrack.codec}`);
+  console.log(`Resolution: ${videoTrack.codedWidth}x${videoTrack.codedHeight}`);
+  console.log(`Display: ${videoTrack.displayWidth}x${videoTrack.displayHeight}`);
+  console.log(`Rotation: ${videoTrack.rotation}°`);
+  
+  const stats = await videoTrack.computePacketStats(100);
+  console.log(`Frame rate: ${stats.averagePacketRate.toFixed(2)} fps`);
+  console.log(`Bitrate: ${(stats.averageBitrate / 1000000).toFixed(2)} Mbps`);
+  
+  const canDecode = await videoTrack.canDecode();
+  console.log(`Can decode: ${canDecode}`);
+}
+
+const audioTrack = await input.getPrimaryAudioTrack();
+if (audioTrack) {
+  console.log(`Codec: ${audioTrack.codec}`);
+  console.log(`Channels: ${audioTrack.numberOfChannels}`);
+  console.log(`Sample rate: ${audioTrack.sampleRate} Hz`);
+}
+```

@@ -1,0 +1,584 @@
+---
+title: Sources and Targets
+description: Understanding how to read from and write to different storage locations in Mediabunny
+---
+
+Mediabunny uses **Sources** for reading data and **Targets** for writing data. These abstractions allow you to work with media files from various locations - memory, disk, network, or streams - using the same consistent API.
+
+## Sources for reading
+
+A `Source` represents where you read media data from. All sources inherit from the abstract `Source` base class.
+
+```typescript source.ts:42-90
+export abstract class Source {
+  abstract _retrieveSize(): MaybePromise<number | null>;
+  abstract _read(start: number, end: number): MaybePromise<ReadResult | null>;
+  abstract _dispose(): void;
+  
+  async getSizeOrNull(): Promise<number | null>
+  async getSize(): Promise<number>
+  onread: ((start: number, end: number) => unknown) | null = null;
+}
+```
+
+### BlobSource
+
+Reads from a browser `Blob` or `File` object - perfect for file uploads and client-side processing.
+
+```typescript source.ts:165-277
+export class BlobSource extends Source {
+  constructor(blob: Blob, options: BlobSourceOptions = {})
+}
+```
+
+<Tabs>
+<Tab title="From file input">
+```typescript
+import { Input, MP4, BlobSource } from 'mediabunny';
+
+// Get file from input element
+const file = fileInput.files[0];
+
+const input = new Input({
+  formats: [MP4],
+  source: new BlobSource(file)
+});
+```
+</Tab>
+
+<Tab title="From drag and drop">
+```typescript
+dropZone.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  
+  const input = new Input({
+    formats: [MP4, WEBM],
+    source: new BlobSource(file)
+  });
+  
+  await processVideo(input);
+});
+```
+</Tab>
+
+<Tab title="With cache options">
+```typescript
+// Configure caching for large files
+const source = new BlobSource(file, {
+  maxCacheSize: 16 * 1024 * 1024  // 16 MB cache
+});
+```
+</Tab>
+</Tabs>
+
+### BufferSource
+
+Reads from an `ArrayBuffer` or `ArrayBufferView` in memory - ideal for small files or pre-loaded data.
+
+```typescript source.ts:97-146
+export class BufferSource extends Source {
+  constructor(buffer: AllowSharedBufferSource)
+}
+```
+
+<CodeGroup>
+```typescript From ArrayBuffer
+const arrayBuffer = await file.arrayBuffer();
+const source = new BufferSource(arrayBuffer);
+```
+
+```typescript From Uint8Array
+const uint8Array = new Uint8Array(/* ... */);
+const source = new BufferSource(uint8Array);
+```
+
+```typescript From fetch response
+const response = await fetch('video.mp4');
+const buffer = await response.arrayBuffer();
+const source = new BufferSource(buffer);
+```
+</CodeGroup>
+
+<Warning>
+BufferSource loads the entire file into memory. Use BlobSource or UrlSource for large files.
+</Warning>
+
+### UrlSource
+
+Reads from a remote URL using HTTP range requests - perfect for streaming from servers or CDNs.
+
+```typescript source.ts:362-634
+export class UrlSource extends Source {
+  constructor(
+    url: string | URL | Request,
+    options: UrlSourceOptions = {}
+  )
+}
+```
+
+<Tabs>
+<Tab title="Basic usage">
+```typescript
+import { Input, MP4, UrlSource } from 'mediabunny';
+
+const input = new Input({
+  formats: [MP4],
+  source: new UrlSource('https://example.com/video.mp4')
+});
+```
+</Tab>
+
+<Tab title="With custom headers">
+```typescript
+const source = new UrlSource('https://api.example.com/video.mp4', {
+  requestInit: {
+    headers: {
+      'Authorization': 'Bearer token123',
+      'X-Custom-Header': 'value'
+    }
+  }
+});
+```
+</Tab>
+
+<Tab title="With retry logic">
+```typescript
+const source = new UrlSource('https://example.com/video.mp4', {
+  getRetryDelay: (attempts, error, url) => {
+    // Exponential backoff: 1s, 2s, 4s, 8s, then give up
+    if (attempts >= 4) return null;
+    return Math.pow(2, attempts);
+  }
+});
+```
+</Tab>
+
+<Tab title="With cache and parallelism">
+```typescript
+const source = new UrlSource('https://example.com/video.mp4', {
+  maxCacheSize: 64 * 1024 * 1024,  // 64 MB cache
+  parallelism: 4                     // 4 parallel requests
+});
+```
+</Tab>
+</Tabs>
+
+<Info>
+UrlSource uses intelligent prefetching to minimize latency and optimize for sequential access patterns.
+</Info>
+
+### FilePathSource
+
+Reads from a file path on the server - for Node.js, Bun, or Deno environments.
+
+```typescript source.ts:654-714
+export class FilePathSource extends Source {
+  constructor(filePath: string, options: FilePathSourceOptions = {})
+}
+```
+
+```typescript
+import { Input, MP4, FilePathSource } from 'mediabunny';
+
+// Node.js / Bun / Deno
+const input = new Input({
+  formats: [MP4],
+  source: new FilePathSource('/path/to/video.mp4')
+});
+
+await processVideo(input);
+
+// IMPORTANT: Free the file handle when done
+input.dispose();
+```
+
+<Warning>
+Always call `input.dispose()` to close the file handle when using FilePathSource.
+</Warning>
+
+### StreamSource
+
+A general-purpose, callback-driven source for custom reading logic.
+
+```typescript source.ts:761-905
+export class StreamSource extends Source {
+  constructor(options: StreamSourceOptions)
+}
+```
+
+<Tabs>
+<Tab title="Custom implementation">
+```typescript
+const source = new StreamSource({
+  getSize: async () => {
+    // Return file size
+    return await getCustomFileSize();
+  },
+  
+  read: async (start, end) => {
+    // Return bytes for the requested range
+    return await fetchBytesFromCustomSource(start, end);
+  },
+  
+  dispose: () => {
+    // Clean up resources
+    closeCustomConnection();
+  },
+  
+  maxCacheSize: 8 * 1024 * 1024,
+  prefetchProfile: 'network'
+});
+```
+</Tab>
+
+<Tab title="S3 example">
+```typescript
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+
+const s3Client = new S3Client({ region: 'us-east-1' });
+
+const source = new StreamSource({
+  getSize: async () => {
+    const headResult = await s3Client.send(new HeadObjectCommand({
+      Bucket: 'my-bucket',
+      Key: 'video.mp4'
+    }));
+    return headResult.ContentLength;
+  },
+  
+  read: async (start, end) => {
+    const result = await s3Client.send(new GetObjectCommand({
+      Bucket: 'my-bucket',
+      Key: 'video.mp4',
+      Range: `bytes=${start}-${end - 1}`
+    }));
+    return await result.Body.transformToByteArray();
+  },
+  
+  prefetchProfile: 'network'
+});
+```
+</Tab>
+</Tabs>
+
+### ReadableStreamSource
+
+Reads from a `ReadableStream<Uint8Array>` - perfect for processing data as it arrives.
+
+```typescript source.ts:939-1170
+export class ReadableStreamSource extends Source {
+  constructor(
+    stream: ReadableStream<Uint8Array>,
+    options: ReadableStreamSourceOptions = {}
+  )
+}
+```
+
+```typescript
+import { Input, MP4, ReadableStreamSource } from 'mediabunny';
+
+// From MediaRecorder
+const mediaRecorder = new MediaRecorder(stream);
+const chunks = [];
+
+const readable = new ReadableStream({
+  start(controller) {
+    mediaRecorder.ondataavailable = (e) => {
+      controller.enqueue(new Uint8Array(await e.data.arrayBuffer()));
+    };
+    mediaRecorder.onstop = () => controller.close();
+    mediaRecorder.start();
+  }
+});
+
+const input = new Input({
+  formats: [MP4, WEBM],
+  source: new ReadableStreamSource(readable)
+});
+```
+
+<Warning>
+ReadableStreamSource is **unsized** - it doesn't know the total length. This limits seeking and random access.
+</Warning>
+
+## Targets for writing
+
+A `Target` represents where you write media data to. All targets inherit from the abstract `Target` base class.
+
+```typescript target.ts:24-38
+export abstract class Target {
+  abstract _createWriter(): Writer;
+  
+  onwrite: ((start: number, end: number) => unknown) | null = null;
+}
+```
+
+### BufferTarget
+
+Writes to an `ArrayBuffer` in memory - great for small files or when you need the complete buffer.
+
+```typescript target.ts:46-54
+export class BufferTarget extends Target {
+  buffer: ArrayBuffer | null = null;
+}
+```
+
+<Tabs>
+<Tab title="Basic usage">
+```typescript
+import { Output, Mp4OutputFormat, BufferTarget } from 'mediabunny';
+
+const target = new BufferTarget();
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target
+});
+
+// ... add tracks, samples, etc.
+
+await output.finalize();
+
+// Access the result
+const arrayBuffer = target.buffer;
+const blob = new Blob([arrayBuffer], { type: 'video/mp4' });
+```
+</Tab>
+
+<Tab title="Download file">
+```typescript
+const target = new BufferTarget();
+
+// ... create and finalize output ...
+
+// Download in browser
+const blob = new Blob([target.buffer], { type: 'video/mp4' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'output.mp4';
+a.click();
+URL.revokeObjectURL(url);
+```
+</Tab>
+</Tabs>
+
+<Warning>
+BufferTarget stores the entire output in memory. For large files, use StreamTarget or FilePathTarget.
+</Warning>
+
+### StreamTarget
+
+Writes to a `WritableStream<StreamTargetChunk>` - versatile target for streaming, files, or custom destinations.
+
+```typescript target.ts:95-129
+export class StreamTarget extends Target {
+  constructor(
+    writable: WritableStream<StreamTargetChunk>,
+    options: StreamTargetOptions = {}
+  )
+}
+```
+
+<Tabs>
+<Tab title="File System Access API">
+```typescript
+// Write to user's file system (browser)
+const fileHandle = await window.showSaveFilePicker({
+  suggestedName: 'output.mp4',
+  types: [{
+    description: 'MP4 Video',
+    accept: { 'video/mp4': ['.mp4'] }
+  }]
+});
+
+const writable = await fileHandle.createWritable();
+const target = new StreamTarget(writable);
+
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target
+});
+
+// ... process ...
+
+await output.finalize();
+// File is automatically saved!
+```
+</Tab>
+
+<Tab title="With chunking">
+```typescript
+// Accumulate data in 16 MB chunks before writing
+const target = new StreamTarget(writable, {
+  chunked: true,
+  chunkSize: 16 * 1024 * 1024
+});
+```
+</Tab>
+
+<Tab title="Custom WritableStream">
+```typescript
+const chunks = [];
+const writable = new WritableStream({
+  write(chunk) {
+    console.log(`Writing ${chunk.data.length} bytes at position ${chunk.position}`);
+    chunks.push(chunk);
+  },
+  close() {
+    console.log('Stream closed');
+  }
+});
+
+const target = new StreamTarget(writable);
+```
+</Tab>
+</Tabs>
+
+### FilePathTarget
+
+Writes to a file path on the server - for Node.js, Bun, or Deno.
+
+```typescript target.ts:146-191
+export class FilePathTarget extends Target {
+  constructor(filePath: string, options: FilePathTargetOptions = {})
+}
+```
+
+```typescript
+import { Output, Mp4OutputFormat, FilePathTarget } from 'mediabunny';
+
+// Node.js / Bun / Deno
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new FilePathTarget('/path/to/output.mp4', {
+    chunked: true  // Write in chunks (recommended)
+  })
+});
+
+// ... add tracks, samples ...
+
+await output.finalize();
+// File is written to disk!
+```
+
+<Tip>
+Use `chunked: true` (default) for better performance with FilePathTarget.
+</Tip>
+
+### NullTarget
+
+Discards all data - useful when extracting data through callbacks or events.
+
+```typescript target.ts:199-204
+export class NullTarget extends Target {
+  // Discards all writes
+}
+```
+
+```typescript
+import { Output, Mp4OutputFormat, NullTarget } from 'mediabunny';
+
+// Extract fragments without keeping the full file
+const output = new Output({
+  format: new Mp4OutputFormat({
+    fastStart: 'fragmented',
+    onMoof: (data, position, timestamp) => {
+      // Save this fragment separately
+      saveFragment(data, timestamp);
+    }
+  }),
+  target: new NullTarget()
+});
+
+// The main output is discarded, but fragments are captured
+```
+
+## Choosing the right source and target
+
+<Tabs>
+<Tab title="Browser">
+**Sources:**
+- ✅ `BlobSource` - File uploads, drag-and-drop
+- ✅ `UrlSource` - Remote video streaming
+- ✅ `BufferSource` - Small files in memory
+- ✅ `ReadableStreamSource` - MediaRecorder output
+
+**Targets:**
+- ✅ `BufferTarget` - Download files
+- ✅ `StreamTarget` - File System Access API, custom streams
+- ✅ `NullTarget` - Extract specific data via callbacks
+</Tab>
+
+<Tab title="Node.js / Bun / Deno">
+**Sources:**
+- ✅ `FilePathSource` - Local files
+- ✅ `UrlSource` - Remote files
+- ✅ `StreamSource` - S3, databases, custom storage
+- ✅ `BufferSource` - Small files in memory
+
+**Targets:**
+- ✅ `FilePathTarget` - Write to disk
+- ✅ `StreamTarget` - Custom WritableStream
+- ✅ `BufferTarget` - Keep in memory
+- ✅ `NullTarget` - Extract fragments
+</Tab>
+</Tabs>
+
+## Performance tips
+
+<CardGroup cols={2}>
+<Card title="Use appropriate caching" icon="memory">
+Configure `maxCacheSize` based on file size and access patterns. Larger caches reduce I/O but use more memory.
+</Card>
+
+<Card title="Enable chunking" icon="layer-group">
+Use `chunked: true` for StreamTarget and FilePathTarget to reduce write overhead.
+</Card>
+
+<Card title="Tune parallelism" icon="arrows-split-up-and-left">
+For UrlSource, increase `parallelism` for faster downloads on high-bandwidth connections.
+</Card>
+
+<Card title="Choose prefetch profiles" icon="rocket">
+Use `'network'` for remote sources, `'fileSystem'` for local files, `'none'` for random access.
+</Card>
+</CardGroup>
+
+## Monitoring reads and writes
+
+Both sources and targets provide callbacks to monitor data flow:
+
+<CodeGroup>
+```typescript Monitor reads
+const source = new UrlSource('https://example.com/video.mp4');
+
+source.onread = (start, end) => {
+  console.log(`Read bytes ${start}-${end} (${end - start} bytes)`);
+};
+```
+
+```typescript Monitor writes
+const target = new BufferTarget();
+
+target.onwrite = (start, end) => {
+  console.log(`Wrote bytes ${start}-${end} (${end - start} bytes)`);
+};
+```
+</CodeGroup>
+
+<Warning>
+These callbacks are called **very frequently** - avoid heavy processing inside them.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+<Card title="Input and Output" href="/concepts/input-output" icon="arrows-left-right">
+Learn how to use sources and targets with Input and Output
+</Card>
+
+<Card title="Formats and Codecs" href="/concepts/formats-and-codecs" icon="file-video">
+Understand which formats work with your sources
+</Card>
+</CardGroup>

@@ -1,0 +1,140 @@
+---
+title: MP3 Encoder
+description: Enable MP3 encoding in browsers using the @mediabunny/mp3-encoder extension
+---
+
+## What is @mediabunny/mp3-encoder?
+
+`@mediabunny/mp3-encoder` is an extension package that adds MP3 encoding support to Mediabunny. Browsers typically have no support for MP3 encoding in their WebCodecs implementations. Given the ubiquity of the format, this extension provides a high-performance MP3 encoder using a WASM build of the [LAME MP3 Encoder](https://lame.sourceforge.io/).
+
+The encoder is implemented using Mediabunny's [custom coder API](/guide/supported-formats-and-codecs#custom-coders) and runs in a dedicated worker thread for optimal performance.
+
+## Why you need it
+
+While browsers widely support MP3 decoding, they lack native MP3 encoding capabilities in WebCodecs. This makes it impossible to export audio to MP3 format without an extension like this.
+
+Key features:
+- **High performance**: Encodes at ~55x real-time speed (5 seconds of audio in ~90ms)
+- **SIMD-optimized**: Uses WebAssembly SIMD for maximum performance
+- **Universal compatibility**: Works with bundlers, directly in browsers, and in Node/Deno/Bun
+- **Zero configuration**: All code (including worker & WASM) bundled into a single file
+- **Automatic integration**: Mediabunny uses it automatically once registered
+
+## Installation
+
+This library peer-depends on Mediabunny. Install both packages:
+
+<CodeGroup>
+```bash npm
+npm install mediabunny @mediabunny/mp3-encoder
+```
+
+```bash yarn
+yarn add mediabunny @mediabunny/mp3-encoder
+```
+
+```bash pnpm
+pnpm add mediabunny @mediabunny/mp3-encoder
+```
+</CodeGroup>
+
+<Note>
+Alternatively, you can include them directly using script tags. Download the distribution files from the [releases page](https://github.com/Vanilagy/mediabunny/releases).
+</Note>
+
+## Usage
+
+### Basic registration
+
+Register the MP3 encoder before starting any encoding tasks:
+
+```ts
+import { registerMp3Encoder } from '@mediabunny/mp3-encoder';
+
+registerMp3Encoder();
+```
+
+That's it! Mediabunny now uses the registered MP3 encoder automatically.
+
+### Check for native support first
+
+To avoid overriding any native MP3 encoder (if the browser supports it), check for support first:
+
+```ts
+import { canEncodeAudio } from 'mediabunny';
+import { registerMp3Encoder } from '@mediabunny/mp3-encoder';
+
+if (!(await canEncodeAudio('mp3'))) {
+    registerMp3Encoder();
+}
+```
+
+## Converting to MP3
+
+Here's a complete example showing how to convert an audio file to MP3:
+
+```ts
+import {
+    Input,
+    ALL_FORMATS,
+    BlobSource,
+    Output,
+    BufferTarget,
+    Mp3OutputFormat,
+    canEncodeAudio,
+    Conversion,
+} from 'mediabunny';
+import { registerMp3Encoder } from '@mediabunny/mp3-encoder';
+
+if (!(await canEncodeAudio('mp3'))) {
+    // Only register the custom encoder if there's no native support
+    registerMp3Encoder();
+}
+
+const input = new Input({
+    source: new BlobSource(file), // From a file picker, for example
+    formats: ALL_FORMATS,
+});
+const output = new Output({
+    format: new Mp3OutputFormat(),
+    target: new BufferTarget(),
+});
+
+const conversion = await Conversion.init({
+    input,
+    output,
+});
+await conversion.execute();
+
+output.target.buffer; // => ArrayBuffer containing the MP3 file
+```
+
+### Supported configurations
+
+The MP3 encoder supports:
+- **Channels**: 1 (mono) or 2 (stereo)
+- **Sample rates**: Standard MP3 sample rates and their half/quarter rates
+  - 48000 Hz, 44100 Hz, 32000 Hz
+  - 24000 Hz, 22050 Hz, 16000 Hz
+  - 12000 Hz, 11025 Hz, 8000 Hz
+- **Bitrates**: Configurable via encoder config
+
+## Implementation details
+
+The encoder architecture consists of:
+
+1. **Main thread class** (`Mp3Encoder` in [index.ts:26](/home/daytona/workspace/source/packages/mp3-encoder/src/index.ts:26)): Manages the encoding workflow
+2. **Worker thread**: Loads the WASM module and handles encoding
+3. **WASM module**: Optimized LAME 3.100 build with SIMD support
+
+The encoder:
+- Converts audio samples to s16-planar format (required by LAME)
+- Sends data to the worker for encoding
+- Accumulates encoded chunks and extracts complete MP3 frames
+- Properly handles frame boundaries and timestamps
+
+<Info>
+The WASM build is ~130 kB gzipped and includes all necessary code in a single file, eliminating the need for CDNs or WASM path configuration.
+</Info>
+
+For more ways of using Mediabunny, refer to the [guide](/guide/introduction).

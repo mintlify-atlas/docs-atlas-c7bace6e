@@ -1,0 +1,149 @@
+---
+title: Introduction
+description: Learn about Mediabunny, a JavaScript library for reading, writing, and converting media files directly in the browser
+---
+
+Mediabunny is a JavaScript library for reading, writing, and converting media files (like MP4, WebM, MP3), directly in the browser. It aims to be a complete toolkit for high-performance media operations on the web. It's written from scratch in pure TypeScript, has zero dependencies, is very performant, and is extremely tree-shakable, meaning you only include what you use.
+
+## What is Mediabunny?
+
+You can think of Mediabunny a bit like [FFmpeg](https://ffmpeg.org/), but built from the ground up for the web. Whether you need to extract metadata, create new video files, or convert between formats, Mediabunny provides a complete toolkit for media operations in JavaScript.
+
+<Note>
+Mediabunny works in both modern browsers and Node.js environments.
+</Note>
+
+## Key features
+
+Mediabunny provides a comprehensive set of features for media processing:
+
+<CardGroup cols={2}>
+  <Card title="Wide format support" icon="file-video">
+    Read and write MP4, MOV, WebM, MKV, WAVE, MP3, Ogg, ADTS, FLAC, and MPEG-TS files
+  </Card>
+  <Card title="Hardware-accelerated encoding" icon="microchip">
+    Supports 25+ video, audio, and subtitle codecs using the WebCodecs API
+  </Card>
+  <Card title="Streaming I/O" icon="wave-pulse">
+    Handle reading and writing files of any size with memory-efficient streaming
+  </Card>
+  <Card title="Zero dependencies" icon="feather">
+    Implemented in highly performant TypeScript with no external dependencies
+  </Card>
+  <Card title="Tree-shakable" icon="tree">
+    Only bundle what you use - as small as 5 kB gzipped
+  </Card>
+  <Card title="High precision" icon="clock">
+    Microsecond-accurate reading and writing operations
+  </Card>
+</CardGroup>
+
+### Complete feature list
+
+- Reading metadata from media files
+- Extracting media data from media files
+- Creating new media files
+- Converting media files
+- Hardware-accelerated decoding and encoding (via the WebCodecs API)
+- Support for multiple video, audio and subtitle tracks
+- Read and write support for many container formats
+- Lazy, optimized, on-demand file reading
+- Input and output streaming, arbitrary file size support
+- File location independence (memory, disk, network)
+- Utilities for compression, resizing, rotation, cropping, resampling, trimming
+- Metadata tag reading and writing (title, artist, cover art, custom tags, attached files)
+- Transmuxing and transcoding
+- Efficient seeking through time
+- Pipelined design for efficient hardware usage and automatic backpressure
+- Custom encoder and decoder support for polyfilling
+- Low and high-level abstractions for different use cases
+- Cross-platform support (browsers and Node.js)
+
+## Use cases
+
+Mediabunny is a general-purpose toolkit that can be used in many ways:
+
+### File conversion and compression
+
+Convert between different media formats and compress files to reduce size while maintaining quality.
+
+### Displaying file metadata
+
+Extract and display information like duration, dimensions, bitrate, codec information, and custom metadata tags.
+
+### Extracting thumbnails
+
+Generate thumbnail images from video files at specific timestamps or intervals.
+
+### Creating videos in the browser
+
+Build new video files directly in the browser using canvas elements or other media sources.
+
+### Building a video editor
+
+Create browser-based video editing applications with trimming, resizing, rotation, and overlay capabilities.
+
+### Live recording and streaming
+
+Record from webcam, microphone, or screen and save to various formats, or stream over the network.
+
+## Get started
+
+Ready to start using Mediabunny? Here are your next steps:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Mediabunny using npm, yarn, pnpm, or a script tag
+  </Card>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Jump right in with code examples for common tasks
+  </Card>
+  <Card title="Reading media files" icon="book-open" href="/guide/reading-media-files">
+    Learn how to extract metadata and media data from files
+  </Card>
+  <Card title="Writing media files" icon="pen" href="/guide/writing-media-files">
+    Create new media files from scratch
+  </Card>
+  <Card title="Converting media files" icon="arrows-rotate" href="/guide/converting-media-files">
+    Convert between formats with transmuxing and transcoding
+  </Card>
+  <Card title="Examples" icon="code" href="/examples">
+    Explore interactive demos and example implementations
+  </Card>
+</CardGroup>
+
+## Technical overview
+
+At its core, Mediabunny is a collection of multiplexers and demultiplexers, one of each for every container format. Demultiplexers stream data from *sources*, while multiplexers stream data to *targets*. Every demultiplexer is capable of extracting file metadata as well as compressed media data, while multiplexers write metadata and encoded media data into a new file.
+
+Mediabunny then provides several wrappers around the WebCodecs API to simplify usage:
+
+- For **reading**, it creates decoders with the correct codec configuration and efficiently decodes media data in a pipelined way
+- For **writing**, it figures out the necessary codec configuration and sets up encoders which are then used to encode raw media data, while respecting the backpressure applied by the encoder
+
+The conversion abstraction is built on top of Mediabunny's reading and writing primitives and combines them both in a heavily-pipelined way, making sure reading and writing happen in lockstep. It also consists of conditional logic probing output track compatibility, decoding support, and finding encodable codec configurations.
+
+Extracting the right decoder configuration from a media file can be tricky and sometimes involves diving into encoded media packet bitstreams. Mediabunny handles all of this complexity for you.
+
+## Mediabunny vs FFmpeg
+
+While FFmpeg is a powerful command-line tool for media processing, Mediabunny offers several advantages for web developers:
+
+**Mediabunny advantages:**
+- Runs entirely in the browser - no server required
+- Written in TypeScript with full type safety
+- Tree-shakable - only include what you use
+- Native JavaScript API designed for web developers
+- Hardware-accelerated via WebCodecs API
+- Extremely small bundle size (5 kB minimum)
+- Built specifically for web use cases
+
+**When to use FFmpeg:**
+- Server-side batch processing
+- Command-line automation
+- Maximum codec support (FFmpeg supports more formats)
+- Legacy format support
+
+<Tip>
+Mediabunny uses a similar conceptual model to FFmpeg (demuxers, muxers, codecs) but exposes it through a JavaScript API designed for modern web development.
+</Tip>

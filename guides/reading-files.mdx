@@ -1,0 +1,346 @@
+---
+title: Reading files
+description: Learn how to read media files, extract metadata, and decode video and audio tracks
+---
+
+Mediabunny allows you to read media files with great control and efficiency. You can extract metadata like duration and resolution, read actual media data from video and audio tracks with frame-accurate timing, and work with many commonly used file formats.
+
+Files are always read partially ("lazily"), meaning only the bytes required to extract the requested information will be read, keeping performance high and memory usage low.
+
+## Creating an input
+
+Reading media files in Mediabunny revolves around the `Input` class. One instance of `Input` represents one media file that you want to read.
+
+<Steps>
+  <Step title="Import the required classes">
+    ```typescript
+    import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+    ```
+  </Step>
+
+  <Step title="Create a new input">
+    ```typescript
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(file),
+    });
+    ```
+
+    The `source` specifies where the `Input` reads data from. See the [Streaming guide](/guides/streaming) for available input sources.
+
+    The `formats` field specifies which file formats the `Input` should support. Using `ALL_FORMATS` means you can load files of any format that Mediabunny supports, but requires including all format parsers. For smaller bundle sizes, specify only the formats you need:
+
+    ```typescript
+    import { Input, MP4, WEBM } from 'mediabunny';
+
+    const input = new Input({
+      formats: [MP4, WEBM],
+      source: new BlobSource(file),
+    });
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  Simply creating an instance of `Input` will perform zero reads and is practically free. The file will only be read once data is requested.
+</Info>
+
+## Reading file metadata
+
+Once you have an `Input`, you can start reading file-level metadata.
+
+### Format and MIME type
+
+```typescript
+// Get the concrete format
+const format = await input.getFormat(); // => Mp4InputFormat
+
+// Get the full MIME type including track codecs
+const mimeType = await input.getMimeType(); 
+// => 'video/mp4; codecs="avc1.42c032, mp4a.40.2"'
+```
+
+### Duration and timestamps
+
+```typescript
+// Get the full duration in seconds
+const duration = await input.computeDuration(); // => 1905.4615
+
+// Get the starting timestamp in seconds
+const startTime = await input.getFirstTimestamp(); // => 0.0
+```
+
+<Note>
+  Methods prefixed with `compute` instead of `get` indicate that the library might need to do more work to retrieve the requested data.
+</Note>
+
+## Reading track information
+
+You can extract the list of all media tracks in the file:
+
+```typescript
+// Get all tracks
+const tracks = await input.getTracks(); // => InputTrack[]
+
+// Get only video or audio tracks
+const videoTracks = await input.getVideoTracks(); // => InputVideoTrack[]
+const audioTracks = await input.getAudioTracks(); // => InputAudioTrack[]
+
+// Get the primary track
+const videoTrack = await input.getPrimaryVideoTrack(); 
+const audioTrack = await input.getPrimaryAudioTrack();
+```
+
+### Common track properties
+
+```typescript
+const track = await input.getPrimaryVideoTrack();
+
+// Track identification
+track.id;           // Unique ID for this track
+track.number;       // 1-based index among tracks of same type
+track.type;         // 'video' | 'audio' | 'subtitle'
+
+// Track metadata
+track.languageCode; // ISO 639-2/T language code (e.g., 'eng')
+track.name;         // User-defined name
+track.disposition;  // Track disposition (default, commentary, etc.)
+
+// Codec information
+track.codec;        // MediaCodec | null
+await track.getCodecParameterString(); // => 'avc1.42001f'
+await track.canDecode(); // => boolean
+```
+
+### Video track properties
+
+```typescript
+const videoTrack = await input.getPrimaryVideoTrack();
+
+// Dimensions
+videoTrack.codedWidth;        // Raw pixel width
+videoTrack.codedHeight;       // Raw pixel height
+videoTrack.displayWidth;      // Display width (after rotation)
+videoTrack.displayHeight;     // Display height (after rotation)
+videoTrack.rotation;          // 0 | 90 | 180 | 270
+videoTrack.pixelAspectRatio;  // { num: number, den: number }
+
+// Decoder configuration for WebCodecs
+const decoderConfig = await videoTrack.getDecoderConfig();
+// => VideoDecoderConfig | null
+
+// Color space information
+const colorSpace = await videoTrack.getColorSpace();
+await videoTrack.hasHighDynamicRange(); // => boolean
+```
+
+### Audio track properties
+
+```typescript
+const audioTrack = await input.getPrimaryAudioTrack();
+
+audioTrack.numberOfChannels; // Number of audio channels
+audioTrack.sampleRate;       // Sample rate in hertz
+
+// Decoder configuration for WebCodecs
+const decoderConfig = await audioTrack.getDecoderConfig();
+// => AudioDecoderConfig | null
+```
+
+### Packet statistics
+
+You can query aggregate statistics about a track's encoded packets:
+
+```typescript
+const stats = await track.computePacketStats();
+// => { packetCount, averagePacketRate, averageBitrate }
+
+// For video tracks, averagePacketRate equals frame rate (FPS)
+const fps = stats.averagePacketRate; // => 24
+```
+
+<Tip>
+  Pass a number to `computePacketStats(50)` to analyze only the first ~50 packets for faster estimation.
+</Tip>
+
+## Reading media data
+
+Mediabunny has the concept of **media sinks** for reading media data from tracks. Different sinks provide different levels of abstraction.
+
+### Reading encoded packets
+
+Loop over all raw encoded packets of a track:
+
+```typescript
+import { EncodedPacketSink } from 'mediabunny';
+
+const videoTrack = await input.getPrimaryVideoTrack();
+const sink = new EncodedPacketSink(videoTrack);
+
+for await (const packet of sink.packets()) {
+  console.log(packet.timestamp, packet.duration);
+}
+```
+
+### Reading decoded video samples
+
+Iterate over decoded video frames:
+
+```typescript
+import { VideoSampleSink } from 'mediabunny';
+
+const videoTrack = await input.getPrimaryVideoTrack();
+const sink = new VideoSampleSink(videoTrack);
+
+for await (const sample of sink.samples()) {
+  // Draw the sample to a canvas
+  sample.draw(ctx, 0, 0);
+  sample.close();
+}
+```
+
+You can also read specific time ranges:
+
+```typescript
+// Loop over frames between 300s and 305s
+for await (const sample of sink.samples(300, 305)) {
+  // Process sample...
+  sample.close();
+}
+
+// Get the frame displayed at timestamp 42s
+const frame = await sink.getSample(42);
+```
+
+### Extracting thumbnails
+
+Generate downscaled thumbnails from a video track:
+
+```typescript
+import { CanvasSink } from 'mediabunny';
+
+const videoTrack = await input.getPrimaryVideoTrack();
+const sink = new CanvasSink(videoTrack, {
+  width: 320,
+  height: 180,
+});
+
+const startTimestamp = await videoTrack.getFirstTimestamp();
+const endTimestamp = await videoTrack.computeDuration();
+
+// Generate five equally-spaced thumbnails
+const thumbnailTimestamps = [0, 0.25, 0.5, 0.75, 1.0].map(
+  (t) => startTimestamp + t * (endTimestamp - startTimestamp)
+);
+
+for await (const result of sink.canvasesAtTimestamps(thumbnailTimestamps)) {
+  // Use result.canvas, result.timestamp
+}
+```
+
+### Reading decoded audio samples
+
+Loop over audio samples for playback:
+
+```typescript
+import { AudioBufferSink } from 'mediabunny';
+
+const audioTrack = await input.getPrimaryAudioTrack();
+const sink = new AudioBufferSink(audioTrack);
+
+for await (const { buffer, timestamp } of sink.buffers(5, 10)) {
+  const node = audioContext.createBufferSource();
+  node.buffer = buffer;
+  node.connect(audioContext.destination);
+  node.start(timestamp);
+}
+```
+
+### Manual decoding with WebCodecs
+
+For full control, combine encoded packets with WebCodecs:
+
+```typescript
+import { EncodedPacketSink } from 'mediabunny';
+
+const videoTrack = await input.getPrimaryVideoTrack();
+const sink = new EncodedPacketSink(videoTrack);
+
+const decoder = new VideoDecoder({
+  output: console.log,
+  error: console.error,
+});
+decoder.configure(await videoTrack.getDecoderConfig());
+
+// Decode all packets from timestamp 37s to 50s
+let currentPacket = await sink.getKeyPacket(37);
+while (currentPacket && currentPacket.timestamp < 50) {
+  decoder.decode(currentPacket.toEncodedVideoChunk());
+  currentPacket = await sink.getNextPacket(currentPacket);
+}
+
+await decoder.flush();
+```
+
+## Example: Extract metadata from a file
+
+<CodeGroup>
+```typescript Browser
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+
+// Get file from user
+const file = await fileInput.files[0];
+const input = new Input({
+  source: new BlobSource(file),
+  formats: ALL_FORMATS,
+});
+
+// Extract metadata
+const format = await input.getFormat();
+const duration = await input.computeDuration();
+const tracks = await input.getTracks();
+
+console.log(`Format: ${format.name}`);
+console.log(`Duration: ${duration} seconds`);
+console.log(`Tracks: ${tracks.length}`);
+```
+
+```typescript Node.js
+import { Input, ALL_FORMATS, FilePathSource } from 'mediabunny';
+
+const input = new Input({
+  source: new FilePathSource('/path/to/video.mp4'),
+  formats: ALL_FORMATS,
+});
+
+const duration = await input.computeDuration();
+const videoTrack = await input.getPrimaryVideoTrack();
+
+console.log(`Duration: ${duration} seconds`);
+console.log(`Resolution: ${videoTrack.displayWidth}x${videoTrack.displayHeight}`);
+
+input.dispose(); // Clean up file handle
+```
+</CodeGroup>
+
+## Disposing inputs
+
+When you're done with an `Input`, you can dispose of it to free up resources:
+
+```typescript
+input.dispose();
+```
+
+This cancels ongoing operations, closes decoders, and prevents future operations. You can also use the `using` keyword for automatic disposal:
+
+```typescript
+{
+  using input = new Input(...);
+  
+  // input will automatically be disposed
+}
+```
+
+<Warning>
+  When using `FilePathSource`, make sure to dispose the input to properly close the internal file handle.
+</Warning>

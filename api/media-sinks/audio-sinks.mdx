@@ -1,0 +1,318 @@
+---
+title: Audio sinks
+description: API reference for audio media sinks including AudioSampleSink, AudioBufferSink, and EncodedPacketSink
+---
+
+Audio sinks provide ways to retrieve decoded audio samples, audio buffers, and encoded packets from audio tracks.
+
+## AudioSampleSink
+
+Sink for retrieving decoded audio samples from an audio track.
+
+### Constructor
+
+```typescript
+new AudioSampleSink(audioTrack: InputAudioTrack)
+```
+
+<ParamField path="audioTrack" type="InputAudioTrack" required>
+  The audio track to read samples from
+</ParamField>
+
+### Methods
+
+#### getSample
+
+Retrieves the audio sample corresponding to the given timestamp.
+
+```typescript
+async getSample(timestamp: number): Promise<AudioSample | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last audio sample (in presentation order) with a start timestamp less than or equal to the given timestamp. Returns null if the timestamp is before the track's first timestamp.
+</ParamField>
+
+<ResponseField name="AudioSample | null">
+  The audio sample at the specified timestamp, or null if not found
+</ResponseField>
+
+#### samples
+
+Creates an async iterator that yields audio samples in presentation order.
+
+```typescript
+samples(startTimestamp?: number, endTimestamp?: number): AsyncGenerator<AudioSample, void, unknown>
+```
+
+<ParamField path="startTimestamp" type="number" default={0}>
+  The timestamp in seconds at which to start yielding samples (inclusive)
+</ParamField>
+
+<ParamField path="endTimestamp" type="number" default={Infinity}>
+  The timestamp in seconds at which to stop yielding samples (exclusive)
+</ParamField>
+
+<ResponseField name="AsyncGenerator<AudioSample>">
+  An async iterator that yields audio samples. This method will intelligently pre-decode a few samples ahead to enable fast iteration.
+</ResponseField>
+
+#### samplesAtTimestamps
+
+Creates an async iterator that yields an audio sample for each timestamp in the argument.
+
+```typescript
+samplesAtTimestamps(timestamps: AnyIterable<number>): AsyncGenerator<AudioSample | null, void, unknown>
+```
+
+<ParamField path="timestamps" type="AnyIterable<number>" required>
+  An iterable or async iterable of timestamps in seconds. This method uses an optimized decoding pipeline if these timestamps are monotonically sorted, decoding each packet at most once.
+</ParamField>
+
+<ResponseField name="AsyncGenerator<AudioSample | null>">
+  An async iterator that yields audio samples. May yield null if no sample is available for a given timestamp.
+</ResponseField>
+
+---
+
+## AudioBufferSink
+
+A sink that retrieves decoded audio samples from an audio track and converts them to `AudioBuffer` instances. This is often more useful than directly retrieving audio samples, as audio buffers can be directly used with the Web Audio API.
+
+### Constructor
+
+```typescript
+new AudioBufferSink(audioTrack: InputAudioTrack)
+```
+
+<ParamField path="audioTrack" type="InputAudioTrack" required>
+  The audio track to read buffers from
+</ParamField>
+
+### Methods
+
+#### getBuffer
+
+Retrieves the audio buffer corresponding to the given timestamp.
+
+```typescript
+async getBuffer(timestamp: number): Promise<WrappedAudioBuffer | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last audio buffer (in presentation order) with a start timestamp less than or equal to the given timestamp. Returns null if the timestamp is before the track's first timestamp.
+</ParamField>
+
+<ResponseField name="WrappedAudioBuffer | null">
+  The audio buffer at the specified timestamp, or null if not found
+</ResponseField>
+
+#### buffers
+
+Creates an async iterator that yields audio buffers in presentation order.
+
+```typescript
+buffers(startTimestamp?: number, endTimestamp?: number): AsyncGenerator<WrappedAudioBuffer, void, unknown>
+```
+
+<ParamField path="startTimestamp" type="number" default={0}>
+  The timestamp in seconds at which to start yielding buffers (inclusive)
+</ParamField>
+
+<ParamField path="endTimestamp" type="number" default={Infinity}>
+  The timestamp in seconds at which to stop yielding buffers (exclusive)
+</ParamField>
+
+<ResponseField name="AsyncGenerator<WrappedAudioBuffer>">
+  An async iterator that yields audio buffers. This method will intelligently pre-decode a few buffers ahead to enable fast iteration.
+</ResponseField>
+
+#### buffersAtTimestamps
+
+Creates an async iterator that yields an audio buffer for each timestamp in the argument.
+
+```typescript
+buffersAtTimestamps(timestamps: AnyIterable<number>): AsyncGenerator<WrappedAudioBuffer | null, void, unknown>
+```
+
+<ParamField path="timestamps" type="AnyIterable<number>" required>
+  An iterable or async iterable of timestamps in seconds. This method uses an optimized decoding pipeline if these timestamps are monotonically sorted, decoding each packet at most once.
+</ParamField>
+
+<ResponseField name="AsyncGenerator<WrappedAudioBuffer | null>">
+  An async iterator that yields audio buffers. May yield null if no buffer is available for a given timestamp.
+</ResponseField>
+
+### WrappedAudioBuffer
+
+An AudioBuffer with additional timing information.
+
+<ResponseField name="buffer" type="AudioBuffer">
+  An AudioBuffer instance
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  The timestamp of the corresponding audio sample, in seconds
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  The duration of the corresponding audio sample, in seconds
+</ResponseField>
+
+---
+
+## EncodedPacketSink
+
+Sink for retrieving encoded packets from an input track.
+
+<Note>
+This sink works with both audio and video tracks and provides access to raw encoded packet data.
+</Note>
+
+### Constructor
+
+```typescript
+new EncodedPacketSink(track: InputTrack)
+```
+
+<ParamField path="track" type="InputTrack" required>
+  The input track to read encoded packets from
+</ParamField>
+
+### Methods
+
+#### getFirstPacket
+
+Retrieves the track's first packet (in decode order), or null if it has no packets.
+
+```typescript
+async getFirstPacket(options?: PacketRetrievalOptions): Promise<EncodedPacket | null>
+```
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval
+</ParamField>
+
+<ResponseField name="EncodedPacket | null">
+  The first packet in the track. The first packet is very likely to be a key packet.
+</ResponseField>
+
+#### getPacket
+
+Retrieves the packet corresponding to the given timestamp.
+
+```typescript
+async getPacket(timestamp: number, options?: PacketRetrievalOptions): Promise<EncodedPacket | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last packet (in presentation order) with a start timestamp less than or equal to the given timestamp. Use `getPacket(Infinity)` to retrieve the track's last packet.
+</ParamField>
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval
+</ParamField>
+
+<ResponseField name="EncodedPacket | null">
+  The packet at the specified timestamp, or null if the timestamp is before the first packet in the track
+</ResponseField>
+
+#### getNextPacket
+
+Retrieves the packet following the given packet (in decode order).
+
+```typescript
+async getNextPacket(packet: EncodedPacket, options?: PacketRetrievalOptions): Promise<EncodedPacket | null>
+```
+
+<ParamField path="packet" type="EncodedPacket" required>
+  The current packet
+</ParamField>
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval
+</ParamField>
+
+<ResponseField name="EncodedPacket | null">
+  The next packet, or null if the given packet is the last packet
+</ResponseField>
+
+#### getKeyPacket
+
+Retrieves the key packet corresponding to the given timestamp.
+
+```typescript
+async getKeyPacket(timestamp: number, options?: PacketRetrievalOptions): Promise<EncodedPacket | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last key packet (in presentation order) with a start timestamp less than or equal to the given timestamp. A key packet is a packet that doesn't require previous packets to be decoded. Use `getKeyPacket(Infinity)` to retrieve the track's last key packet.
+</ParamField>
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval. To ensure that the returned packet is guaranteed to be a real key frame, enable `options.verifyKeyPackets`.
+</ParamField>
+
+<ResponseField name="EncodedPacket | null">
+  The key packet at the specified timestamp, or null if the timestamp is before the first key packet in the track
+</ResponseField>
+
+#### getNextKeyPacket
+
+Retrieves the key packet following the given packet (in decode order).
+
+```typescript
+async getNextKeyPacket(packet: EncodedPacket, options?: PacketRetrievalOptions): Promise<EncodedPacket | null>
+```
+
+<ParamField path="packet" type="EncodedPacket" required>
+  The current packet
+</ParamField>
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval. To ensure that the returned packet is guaranteed to be a real key frame, enable `options.verifyKeyPackets`.
+</ParamField>
+
+<ResponseField name="EncodedPacket | null">
+  The next key packet, or null if the given packet is the last key packet
+</ResponseField>
+
+#### packets
+
+Creates an async iterator that yields the packets in this track in decode order.
+
+```typescript
+packets(
+  startPacket?: EncodedPacket,
+  endPacket?: EncodedPacket,
+  options?: PacketRetrievalOptions
+): AsyncGenerator<EncodedPacket, void, unknown>
+```
+
+<ParamField path="startPacket" type="EncodedPacket">
+  The packet from which iteration should begin. This packet will also be yielded.
+</ParamField>
+
+<ParamField path="endPacket" type="EncodedPacket">
+  The packet at which iteration should end. This packet will not be yielded.
+</ParamField>
+
+<ParamField path="options" type="PacketRetrievalOptions">
+  Additional options for controlling packet retrieval
+</ParamField>
+
+<ResponseField name="AsyncGenerator<EncodedPacket>">
+  An async iterator that yields encoded packets. This method will intelligently preload packets based on the speed of the consumer.
+</ResponseField>
+
+### PacketRetrievalOptions
+
+Additional options for controlling packet retrieval.
+
+<ParamField path="metadataOnly" type="boolean" default={false}>
+  When set to `true`, only packet metadata (like timestamp) will be retrieved - the actual packet data will not be loaded.
+</ParamField>
+
+<ParamField path="verifyKeyPackets" type="boolean" default={false}>
+  When set to true, key packets will be verified upon retrieval by looking into the packet's bitstream. If not enabled, the packet types will be determined solely by what's stored in the containing file and may be incorrect, potentially leading to decoder errors. Since determining a packet's actual type requires looking into its data, this option cannot be enabled together with `metadataOnly`.
+</ParamField>

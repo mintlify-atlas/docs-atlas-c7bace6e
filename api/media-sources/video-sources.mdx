@@ -1,0 +1,293 @@
+---
+title: Video sources
+description: Video source classes for adding video samples to output tracks
+---
+
+Video sources are used to add video samples (frames) to output video tracks. All video sources extend the base `VideoSource` class.
+
+## CanvasSource
+
+Captures frames from an HTML canvas or OffscreenCanvas element and encodes them for the output video track.
+
+### Constructor
+
+```typescript
+new CanvasSource(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  encodingConfig: VideoEncodingConfig
+)
+```
+
+<ParamField path="canvas" type="HTMLCanvasElement | OffscreenCanvas" required>
+  The canvas element to capture frames from.
+</ParamField>
+
+<ParamField path="encodingConfig" type="VideoEncodingConfig" required>
+  Configuration object that controls video encoding.
+
+  <Expandable title="VideoEncodingConfig properties">
+    <ParamField path="codec" type="VideoCodec" required>
+      The video codec for encoding: `'avc'`, `'hevc'`, `'vp8'`, `'vp9'`, or `'av1'`.
+    </ParamField>
+
+    <ParamField path="bitrate" type="number | Quality" required>
+      Target bitrate in bits per second, or a `Quality` object for subjective quality levels.
+    </ParamField>
+
+    <ParamField path="keyFrameInterval" type="number" default="5">
+      Interval in seconds for encoding key frames. Frequent key frames improve seeking but increase file size.
+    </ParamField>
+
+    <ParamField path="sizeChangeBehavior" type="'deny' | 'passThrough' | 'fill' | 'contain' | 'cover'" default="'deny'">
+      Behavior when video frame dimensions change:
+      - `'deny'`: Throw an error (requires constant dimensions)
+      - `'passThrough'`: Allow the change and pass directly to encoder
+      - `'fill'`: Stretch to fill original box (may alter aspect ratio)
+      - `'contain'`: Fit within original box preserving aspect ratio (may letterbox)
+      - `'cover'`: Scale until original box is filled, preserving aspect ratio
+    </ParamField>
+
+    <ParamField path="alpha" type="'discard' | 'keep'" default="'discard'">
+      What to do with alpha channel data:
+      - `'discard'`: Only keep color data (opaque video)
+      - `'keep'`: Encode alpha as side data (requires WebM/Matroska container)
+    </ParamField>
+
+    <ParamField path="bitrateMode" type="'constant' | 'variable'" default="'variable'">
+      Bitrate encoding mode.
+    </ParamField>
+
+    <ParamField path="latencyMode" type="'quality' | 'realtime'" default="'quality'">
+      Encoder latency mode:
+      - `'quality'`: Prioritize quality, no frame dropping
+      - `'realtime'`: Prioritize low latency, may drop frames if overloaded
+    </ParamField>
+
+    <ParamField path="hardwareAcceleration" type="'no-preference' | 'prefer-hardware' | 'prefer-software'" default="'no-preference'">
+      Hardware acceleration preference.
+    </ParamField>
+
+    <ParamField path="fullCodecString" type="string">
+      Full codec string from Mediabunny Codec Registry. Auto-constructed if not provided.
+    </ParamField>
+
+    <ParamField path="scalabilityMode" type="string">
+      Encoding scalability mode identifier as defined by WebRTC-SVC.
+    </ParamField>
+
+    <ParamField path="contentHint" type="string">
+      Video content hint as defined by mst-content-hint.
+    </ParamField>
+
+    <ParamField path="onEncodedPacket" type="(packet: EncodedPacket, meta?: EncodedVideoChunkMetadata) => unknown">
+      Callback for each successfully encoded packet.
+    </ParamField>
+
+    <ParamField path="onEncoderConfig" type="(config: VideoEncoderConfig) => unknown">
+      Callback when the internal WebCodecs encoder config is created.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Methods
+
+#### add
+
+Captures the current canvas state as a video frame, encodes it, and adds it to the output.
+
+```typescript
+add(
+  timestamp: number,
+  duration?: number,
+  encodeOptions?: VideoEncoderEncodeOptions
+): Promise<void>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp of the sample in seconds.
+</ParamField>
+
+<ParamField path="duration" type="number" default="0">
+  The duration of the sample in seconds.
+</ParamField>
+
+<ParamField path="encodeOptions" type="VideoEncoderEncodeOptions">
+  Additional WebCodecs encoding options.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source, preventing future samples and signaling no more data will be added to this track.
+
+```typescript
+close(): void
+```
+
+<Note>
+Calling `close()` is optional but recommended after adding the last sample for improved performance and reduced memory usage.
+</Note>
+
+---
+
+## VideoSampleSource
+
+Adds raw, unencoded video samples (frames) to an output video track with automatic encoding.
+
+### Constructor
+
+```typescript
+new VideoSampleSource(encodingConfig: VideoEncodingConfig)
+```
+
+<ParamField path="encodingConfig" type="VideoEncodingConfig" required>
+  Configuration object that controls video encoding. See [CanvasSource](#canvassource) for detailed properties.
+</ParamField>
+
+### Methods
+
+#### add
+
+Encodes a video sample (frame) and adds it to the output.
+
+```typescript
+add(
+  videoSample: VideoSample,
+  encodeOptions?: VideoEncoderEncodeOptions
+): Promise<void>
+```
+
+<ParamField path="videoSample" type="VideoSample" required>
+  The video sample to encode and add.
+</ParamField>
+
+<ParamField path="encodeOptions" type="VideoEncoderEncodeOptions">
+  Additional WebCodecs encoding options.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source. See [CanvasSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+---
+
+## EncodedVideoPacketSource
+
+Directly pipes pre-encoded video packets into the output file without additional encoding.
+
+### Constructor
+
+```typescript
+new EncodedVideoPacketSource(codec: VideoCodec)
+```
+
+<ParamField path="codec" type="VideoCodec" required>
+  The codec used to encode the packets: `'avc'`, `'hevc'`, `'vp8'`, `'vp9'`, or `'av1'`.
+</ParamField>
+
+### Methods
+
+#### add
+
+Adds an encoded packet to the output video track. Packets must be added in **decode order**, while timestamps must be **presentation timestamps**. B-frames are handled automatically.
+
+```typescript
+add(
+  packet: EncodedPacket,
+  meta?: EncodedVideoChunkMetadata
+): Promise<void>
+```
+
+<ParamField path="packet" type="EncodedPacket" required>
+  The encoded video packet to add. Cannot be a metadata-only packet.
+</ParamField>
+
+<ParamField path="meta" type="EncodedVideoChunkMetadata">
+  Additional encoder metadata. You should pass this for the first call, including a valid decoder config.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<void>">
+  Resolves when the output is ready to receive more samples. Await this to respect backpressure.
+</ResponseField>
+
+#### close
+
+Closes the source. See [CanvasSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+---
+
+## MediaStreamVideoTrackSource
+
+Encodes frames from a live `MediaStreamVideoTrack` (e.g., webcam or screen capture) and pipes them to the output. Frames are automatically captured once the connected Output is started.
+
+### Constructor
+
+```typescript
+new MediaStreamVideoTrackSource(
+  track: MediaStreamVideoTrack,
+  encodingConfig: VideoEncodingConfig
+)
+```
+
+<ParamField path="track" type="MediaStreamVideoTrack" required>
+  The video MediaStreamTrack to capture frames from.
+</ParamField>
+
+<ParamField path="encodingConfig" type="VideoEncodingConfig" required>
+  Configuration object that controls video encoding. `latencyMode` is automatically set to `'realtime'`. See [CanvasSource](#canvassource) for other properties.
+</ParamField>
+
+### Properties
+
+<ResponseField name="errorPromise" type="Promise<never>">
+  A promise that rejects upon any error within this source. This promise never resolves. You should handle this promise to catch internal errors.
+</ResponseField>
+
+<ResponseField name="paused" type="boolean">
+  Whether this source is currently paused as a result of calling `pause()`.
+</ResponseField>
+
+### Methods
+
+#### pause
+
+Pauses the capture of video frames. Frames emitted by the media stream are ignored while paused. This does **not** close the underlying track.
+
+```typescript
+pause(): void
+```
+
+#### resume
+
+Resumes the capture of video frames after being paused.
+
+```typescript
+resume(): void
+```
+
+#### close
+
+Stops capturing and closes the source. See [CanvasSource.close()](#close) for details.
+
+```typescript
+close(): void
+```
+
+<Note>
+Make sure to handle the `errorPromise` field so that internal errors are properly surfaced.
+</Note>

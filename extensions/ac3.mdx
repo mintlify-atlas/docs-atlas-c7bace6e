@@ -1,0 +1,190 @@
+---
+title: AC-3 Decoder and Encoder
+description: Enable AC-3 and E-AC-3 decoding and encoding with the @mediabunny/ac3 extension
+---
+
+## What is @mediabunny/ac3?
+
+`@mediabunny/ac3` is an extension package that adds AC-3 (Dolby Digital) and E-AC-3 (Dolby Digital Plus) support to Mediabunny. Browsers have no support for these codecs in their WebCodecs implementations. This package provides both a decoder and encoder, implemented using Mediabunny's [custom coder API](/guide/supported-formats-and-codecs#custom-coders).
+
+Under the hood, it uses a fast, size-optimized WASM build of [FFmpeg](https://ffmpeg.org/)'s AC-3 and E-AC-3 coders.
+
+## AC-3 and E-AC-3 support
+
+**AC-3 (Dolby Digital)** is a widely-used audio codec in:
+- DVD and Blu-ray discs
+- Digital television broadcasts
+- Streaming services
+- Cinema sound systems
+
+**E-AC-3 (Dolby Digital Plus)** is an enhanced version offering:
+- Better compression efficiency
+- Support for more channels (up to 15.1)
+- Higher quality at lower bitrates
+- Common in streaming platforms like Netflix and Amazon Prime
+
+This extension enables you to work with both formats directly in the browser.
+
+## Installation
+
+This library peer-depends on Mediabunny. Install both packages:
+
+<CodeGroup>
+```bash npm
+npm install mediabunny @mediabunny/ac3
+```
+
+```bash yarn
+yarn add mediabunny @mediabunny/ac3
+```
+
+```bash pnpm
+pnpm add mediabunny @mediabunny/ac3
+```
+</CodeGroup>
+
+<Note>
+Alternatively, you can include them directly using script tags. Download the distribution files from the [releases page](https://github.com/Vanilagy/mediabunny/releases).
+</Note>
+
+## Usage
+
+### Registering the decoder
+
+Register the AC-3 and E-AC-3 decoder before starting any decoding tasks:
+
+```ts
+import { registerAc3Decoder } from '@mediabunny/ac3';
+
+registerAc3Decoder();
+```
+
+Mediabunny will now automatically use the registered decoder when it encounters AC-3 or E-AC-3 audio.
+
+### Registering the encoder
+
+To enable encoding to AC-3 or E-AC-3 formats:
+
+```ts
+import { registerAc3Encoder } from '@mediabunny/ac3';
+
+registerAc3Encoder();
+```
+
+### Registering both
+
+You can register both the decoder and encoder in a single setup:
+
+```ts
+import { registerAc3Decoder, registerAc3Encoder } from '@mediabunny/ac3';
+
+registerAc3Decoder();
+registerAc3Encoder();
+```
+
+## Decoding AC-3 audio
+
+Once registered, Mediabunny automatically uses the AC-3 decoder when processing AC-3 or E-AC-3 audio:
+
+```ts
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+import { registerAc3Decoder } from '@mediabunny/ac3';
+
+registerAc3Decoder();
+
+const input = new Input({
+    source: new BlobSource(file), // File containing AC-3 or E-AC-3 audio
+    formats: ALL_FORMATS,
+});
+
+// Mediabunny will automatically decode AC-3/E-AC-3 audio tracks
+```
+
+The decoder (defined in [decoder.ts:18](/home/daytona/workspace/source/packages/ac3/src/decoder.ts:18)):
+- Supports both `'ac3'` and `'eac3'` codecs
+- Decodes compressed packets to PCM audio samples
+- Handles timestamps and sample rate conversions automatically
+- Runs in a worker thread for optimal performance
+
+## Encoding to AC-3
+
+To encode audio to AC-3 or E-AC-3 format:
+
+```ts
+import {
+    Input,
+    Output,
+    BlobSource,
+    BufferTarget,
+    ALL_FORMATS,
+    Conversion,
+} from 'mediabunny';
+import { registerAc3Encoder } from '@mediabunny/ac3';
+
+registerAc3Encoder();
+
+const input = new Input({
+    source: new BlobSource(inputFile),
+    formats: ALL_FORMATS,
+});
+
+const output = new Output({
+    format: {
+        kind: 'ac3', // or 'eac3' for E-AC-3
+        audioCodec: 'ac3', // or 'eac3'
+        audioChannels: 2,
+        audioSampleRate: 48000,
+        audioBitrate: 192000, // 192 kbps
+    },
+    target: new BufferTarget(),
+});
+
+const conversion = await Conversion.init({ input, output });
+await conversion.execute();
+
+output.target.buffer; // => ArrayBuffer containing the AC-3 file
+```
+
+### Encoder configuration
+
+The AC-3 encoder (defined in [encoder.ts:20](/home/daytona/workspace/source/packages/ac3/src/encoder.ts:20)) supports:
+
+**AC-3:**
+- **Channels**: 1-8 channels
+- **Sample rates**: 48000 Hz, 44100 Hz, 32000 Hz
+- **Bitrate**: Required (e.g., 192000 for 192 kbps)
+
+**E-AC-3:**
+- **Channels**: 1-8 channels  
+- **Sample rates**: Standard rates (48000, 44100, 32000) plus reduced rates (24000, 22050, 16000)
+- **Bitrate**: Required
+
+<Warning>
+Both AC-3 and E-AC-3 encoding require you to specify a bitrate in the encoder configuration. The encoder will not work without it.
+</Warning>
+
+## Implementation details
+
+The package uses a shared worker architecture:
+
+1. **Worker client** ([worker-client.ts](/home/daytona/workspace/source/packages/ac3/src/worker-client.ts)): Manages communication with the worker
+2. **Decoder class** ([decoder.ts:18](/home/daytona/workspace/source/packages/ac3/src/decoder.ts:18)): Handles decoding workflow
+3. **Encoder class** ([encoder.ts:20](/home/daytona/workspace/source/packages/ac3/src/encoder.ts:20)): Handles encoding workflow
+4. **Worker thread** ([codec.worker.ts](/home/daytona/workspace/source/packages/ac3/src/codec.worker.ts)): Loads FFmpeg WASM and processes audio
+
+The encoder:
+- Accumulates incoming audio samples until a full frame is ready
+- Converts samples to f32 interleaved format (required by FFmpeg)
+- Encodes complete frames and outputs timestamped packets
+- Pads the final frame with silence if needed during flush
+
+The decoder:
+- Receives compressed AC-3/E-AC-3 packets
+- Decodes them to PCM audio samples
+- Preserves timestamps and sample rate information
+
+<Info>
+The WASM build is highly optimized for size and performance, using FFmpeg with only AC-3 and E-AC-3 codecs enabled. This keeps the bundle size minimal while providing full codec support.
+</Info>
+
+For more ways of using Mediabunny, refer to the [guide](/guide/introduction).

@@ -1,0 +1,201 @@
+---
+title: Video sinks
+description: API reference for video media sinks including VideoSampleSink and CanvasSink
+---
+
+Video sinks provide ways to retrieve and render decoded video frames from video tracks.
+
+## VideoSampleSink
+
+A sink that retrieves decoded video samples (video frames) from a video track.
+
+### Constructor
+
+```typescript
+new VideoSampleSink(videoTrack: InputVideoTrack)
+```
+
+<ParamField path="videoTrack" type="InputVideoTrack" required>
+  The video track to read samples from
+</ParamField>
+
+### Methods
+
+#### getSample
+
+Retrieves the video sample (frame) corresponding to the given timestamp.
+
+```typescript
+async getSample(timestamp: number): Promise<VideoSample | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last video sample (in presentation order) with a start timestamp less than or equal to the given timestamp. Returns null if the timestamp is before the track's first timestamp.
+</ParamField>
+
+<ResponseField name="VideoSample | null">
+  The video sample at the specified timestamp, or null if not found
+</ResponseField>
+
+#### samples
+
+Creates an async iterator that yields video samples (frames) in presentation order.
+
+```typescript
+samples(startTimestamp?: number, endTimestamp?: number): AsyncGenerator<VideoSample, void, unknown>
+```
+
+<ParamField path="startTimestamp" type="number" default={0}>
+  The timestamp in seconds at which to start yielding samples (inclusive)
+</ParamField>
+
+<ParamField path="endTimestamp" type="number" default={Infinity}>
+  The timestamp in seconds at which to stop yielding samples (exclusive)
+</ParamField>
+
+<ResponseField name="AsyncGenerator<VideoSample>">
+  An async iterator that yields video samples. This method will intelligently pre-decode a few frames ahead to enable fast iteration.
+</ResponseField>
+
+#### samplesAtTimestamps
+
+Creates an async iterator that yields a video sample for each timestamp in the argument.
+
+```typescript
+samplesAtTimestamps(timestamps: AnyIterable<number>): AsyncGenerator<VideoSample | null, void, unknown>
+```
+
+<ParamField path="timestamps" type="AnyIterable<number>" required>
+  An iterable or async iterable of timestamps in seconds. This method uses an optimized decoding pipeline if these timestamps are monotonically sorted, decoding each packet at most once.
+</ParamField>
+
+<ResponseField name="AsyncGenerator<VideoSample | null>">
+  An async iterator that yields video samples. May yield null if no frame is available for a given timestamp.
+</ResponseField>
+
+---
+
+## CanvasSink
+
+A sink that renders video samples (frames) to canvases. This is often more useful than directly retrieving frames, as it comes with common preprocessing steps such as resizing or applying rotation metadata.
+
+<Note>
+This sink will yield `HTMLCanvasElement`s when in a DOM context, and `OffscreenCanvas`es otherwise.
+</Note>
+
+### Constructor
+
+```typescript
+new CanvasSink(videoTrack: InputVideoTrack, options?: CanvasSinkOptions)
+```
+
+<ParamField path="videoTrack" type="InputVideoTrack" required>
+  The video track to render frames from
+</ParamField>
+
+<ParamField path="options" type="CanvasSinkOptions">
+  Configuration options for canvas rendering
+</ParamField>
+
+### CanvasSinkOptions
+
+<ParamField path="alpha" type="boolean" default={false}>
+  Whether the output canvases should have transparency instead of a black background. Set this to `true` when using this sink to read transparent videos.
+</ParamField>
+
+<ParamField path="width" type="number">
+  The width of the output canvas in pixels, defaulting to the display width of the video track. If height is not set, it will be deduced automatically based on aspect ratio.
+</ParamField>
+
+<ParamField path="height" type="number">
+  The height of the output canvas in pixels, defaulting to the display height of the video track. If width is not set, it will be deduced automatically based on aspect ratio.
+</ParamField>
+
+<ParamField path="fit" type="'fill' | 'contain' | 'cover'">
+  The fitting algorithm in case both width and height are set:
+  - `'fill'` - Stretch the image to fill the entire box, potentially altering aspect ratio
+  - `'contain'` - Contain the entire image within the box while preserving aspect ratio (may lead to letterboxing)
+  - `'cover'` - Scale the image until the entire box is filled, while preserving aspect ratio
+</ParamField>
+
+<ParamField path="rotation" type="0 | 90 | 180 | 270">
+  The clockwise rotation by which to rotate the raw video frame. Defaults to the rotation set in the file metadata. Rotation is applied before resizing.
+</ParamField>
+
+<ParamField path="crop" type="CropRectangle">
+  Specifies the rectangular region of the input video to crop to. The crop region will automatically be clamped to the dimensions of the input video track. Cropping is performed after rotation but before resizing. The crop region is in the display pixel space of the underlying video data.
+</ParamField>
+
+<ParamField path="poolSize" type="number">
+  When set, specifies the number of canvases in the pool. These canvases will be reused in a ring buffer / round-robin fashion. This keeps the amount of allocated VRAM constant and relieves the browser from constantly allocating/deallocating canvases. A pool size of 0 or `undefined` disables the pool and means a new canvas is created each time.
+</ParamField>
+
+### Methods
+
+#### getCanvas
+
+Retrieves a canvas with the video frame corresponding to the given timestamp.
+
+```typescript
+async getCanvas(timestamp: number): Promise<WrappedCanvas | null>
+```
+
+<ParamField path="timestamp" type="number" required>
+  The timestamp used for retrieval, in seconds. Returns the last video frame (in presentation order) with a start timestamp less than or equal to the given timestamp. Returns null if the timestamp is before the track's first timestamp.
+</ParamField>
+
+<ResponseField name="WrappedCanvas | null">
+  A canvas with the rendered video frame and timing information, or null if not found
+</ResponseField>
+
+#### canvases
+
+Creates an async iterator that yields canvases with video frames in presentation order.
+
+```typescript
+canvases(startTimestamp?: number, endTimestamp?: number): AsyncGenerator<WrappedCanvas, void, unknown>
+```
+
+<ParamField path="startTimestamp" type="number" default={0}>
+  The timestamp in seconds at which to start yielding canvases (inclusive)
+</ParamField>
+
+<ParamField path="endTimestamp" type="number" default={Infinity}>
+  The timestamp in seconds at which to stop yielding canvases (exclusive)
+</ParamField>
+
+<ResponseField name="AsyncGenerator<WrappedCanvas>">
+  An async iterator that yields canvases. This method will intelligently pre-decode a few frames ahead to enable fast iteration.
+</ResponseField>
+
+#### canvasesAtTimestamps
+
+Creates an async iterator that yields a canvas for each timestamp in the argument.
+
+```typescript
+canvasesAtTimestamps(timestamps: AnyIterable<number>): AsyncGenerator<WrappedCanvas | null, void, unknown>
+```
+
+<ParamField path="timestamps" type="AnyIterable<number>" required>
+  An iterable or async iterable of timestamps in seconds. This method uses an optimized decoding pipeline if these timestamps are monotonically sorted, decoding each packet at most once.
+</ParamField>
+
+<ResponseField name="AsyncGenerator<WrappedCanvas | null>">
+  An async iterator that yields canvases. May yield null if no frame is available for a given timestamp.
+</ResponseField>
+
+### WrappedCanvas
+
+A canvas with additional timing information.
+
+<ResponseField name="canvas" type="HTMLCanvasElement | OffscreenCanvas">
+  A canvas element or offscreen canvas
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  The timestamp of the corresponding video sample, in seconds
+</ResponseField>
+
+<ResponseField name="duration" type="number">
+  The duration of the corresponding video sample, in seconds
+</ResponseField>

@@ -1,80 +1,383 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get started quickly with code examples for common Mediabunny operations
 ---
 
-## Get started in three steps
+This page provides a collection of short code snippets that showcase the most common operations you may use Mediabunny for.
 
-Get your documentation site running locally and make your first customization.
+## Read file metadata
 
-### Step 1: Set up your local environment
+Extract information about a media file without decoding the actual media data:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+```typescript
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
 
-### Step 2: Deploy your changes
+const input = new Input({
+  formats: ALL_FORMATS, // Supporting all file formats
+  source: new BlobSource(file), // Assuming a File instance
+});
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+const duration = await input.computeDuration(); // in seconds
+const allTracks = await input.getTracks(); // List of all tracks
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+// Extract video metadata
+const videoTrack = await input.getPrimaryVideoTrack();
+if (videoTrack) {
+  videoTrack.displayWidth; // in pixels
+  videoTrack.displayHeight; // in pixels
+  videoTrack.rotation; // in degrees clockwise
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+  // Estimate frame rate (FPS)
+  const packetStats = await videoTrack.computePacketStats(100);
+  const averageFrameRate = packetStats.averagePacketRate;
+}
 
-### Step 3: Go live
+// Extract audio metadata
+const audioTrack = await input.getPrimaryAudioTrack();
+if (audioTrack) {
+  audioTrack.numberOfChannels;
+  audioTrack.sampleRate; // in Hz
+}
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+// Extract metadata tags
+const tags = await input.getMetadataTags();
+tags.title; // Title
+tags.date; // Release date
+tags.images[0]; // Cover art
+tags.raw['TBPM']; // Custom tags
+```
+
+<Info>
+Check out the [Metadata extraction example](/examples/metadata-extraction) to see this code in action.
+</Info>
+
+## Create new media files
+
+Create a new media file from scratch using various sources:
+
+```typescript
+import {
+  Output,
+  BufferTarget,
+  Mp4OutputFormat,
+  CanvasSource,
+  AudioBufferSource,
+  QUALITY_HIGH,
+} from 'mediabunny';
+
+// An Output represents a new media file
+const output = new Output({
+  format: new Mp4OutputFormat(), // The format of the file
+  target: new BufferTarget(), // Where to write the file (here, to memory)
+});
+
+// Example: add a video track driven by a canvas
+const videoSource = new CanvasSource(canvas, {
+  codec: 'avc',
+  bitrate: QUALITY_HIGH,
+});
+output.addVideoTrack(videoSource);
+
+// Example: add an audio track driven by AudioBuffers
+const audioSource = new AudioBufferSource({
+  codec: 'aac',
+  bitrate: QUALITY_HIGH,
+});
+output.addAudioTrack(audioSource);
+
+// Set some metadata tags
+output.setMetadataTags({
+  title: 'My Movie',
+  artist: 'Me',
+});
+
+await output.start();
+
+// Add some video frames
+for (let frame = 0; frame < 900; frame++) {
+  await videoSource.add(frame / 30, 1 / 30);
+}
+
+// Add some audio data
+await audioSource.add(audioBuffer1);
+await audioSource.add(audioBuffer2);
+
+await output.finalize();
+
+const buffer = output.target.buffer; // ArrayBuffer containing the final MP4 file
+```
+
+<Info>
+- Check out the [Procedural generation example](/examples/procedural-generation) for a demo of in-browser video generation
+- You can create files of many different formats - see [Output formats](/guide/output-formats)
+- Media data can be added from different sources - see [Media sources](/guide/media-sources)
+</Info>
+
+## Convert files
+
+Convert between different media formats with automatic transmuxing or transcoding:
+
+```typescript
+import {
+  Input,
+  Output,
+  Conversion,
+  ALL_FORMATS,
+  BlobSource,
+  BufferTarget,
+  Mp4OutputFormat,
+} from 'mediabunny';
+
+// Create an input from the source file
+const input = new Input({
+  formats: ALL_FORMATS,
+  source: new BlobSource(file),
+});
+
+// Define the output file
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new BufferTarget(),
+});
+
+const conversion = await Conversion.init({ input, output });
+if (!conversion.isValid) {
+  // The conversion isn't possible and would error upon execution.
+  // Check `discardedTracks` for the reasons.
+  return;
+}
+
+// List of tracks that won't make it into the output:
+conversion.discardedTracks;
+
+conversion.onProgress = (progress) => {
+  console.log(`Progress: ${progress * 100}%`);
+};
+
+await conversion.execute();
+// Conversion is complete
+
+const buffer = output.target.buffer; // ArrayBuffer containing the final MP4 file
+```
+
+<Tip>
+This code will automatically **transmux** (copy media data) when possible, and **transcode** (re-encode media data) when necessary.
+</Tip>
+
+## More examples
+
+<Steps>
+  <Step title="Read media data">
+    Decode video frames and audio chunks from a media file:
+
+    ```typescript
+    import {
+      Input,
+      ALL_FORMATS,
+      BlobSource,
+      VideoSampleSink,
+      AudioSampleSink,
+    } from 'mediabunny';
+
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(file),
+    });
+
+    // Read video frames
+    const videoTrack = await input.getPrimaryVideoTrack();
+    if (videoTrack) {
+      const decodable = await videoTrack.canDecode();
+      if (decodable) {
+        const sink = new VideoSampleSink(videoTrack);
+
+        // Get the video frame at timestamp 5s
+        const videoSample = await sink.getSample(5);
+        videoSample.timestamp; // in seconds
+        videoSample.duration; // in seconds
+
+        // Draw the frame to a canvas
+        videoSample.draw(ctx, 0, 0);
+
+        // Loop over all frames in the first 30s of video
+        for await (const sample of sink.samples(0, 30)) {
+          // Process each frame...
+        }
+      }
+    }
+    ```
+
+    See [Media sinks](/guide/media-sinks) for all the ways to extract media data from tracks.
+  </Step>
+
+  <Step title="Extract video thumbnails">
+    Generate thumbnail images from video files:
+
+    ```typescript
+    import {
+      Input,
+      ALL_FORMATS,
+      BlobSource,
+      CanvasSink,
+    } from 'mediabunny';
+
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(file),
+    });
+
+    const videoTrack = await input.getPrimaryVideoTrack();
+    if (videoTrack) {
+      const decodable = await videoTrack.canDecode();
+      if (decodable) {
+        const sink = new CanvasSink(videoTrack, {
+          width: 320, // Automatically resize the thumbnails
+        });
+
+        // Get the thumbnail at timestamp 10s
+        const result = await sink.getCanvas(10);
+        result.canvas; // HTMLCanvasElement | OffscreenCanvas
+        result.timestamp; // in seconds
+        result.duration; // in seconds
+
+        // Generate five equally-spaced thumbnails through the video
+        const startTimestamp = await videoTrack.getFirstTimestamp();
+        const endTimestamp = await videoTrack.computeDuration();
+        const timestamps = [0, 0.2, 0.4, 0.6, 0.8].map(
+          (t) => startTimestamp + t * (endTimestamp - startTimestamp)
+        );
+
+        // Loop over these timestamps
+        for await (const result of sink.canvasesAtTimestamps(timestamps)) {
+          // Process each thumbnail...
+        }
+      }
+    }
+    ```
+
+    Check out the [Thumbnail generation example](/examples/thumbnail-generation) to see this in action.
+  </Step>
+
+  <Step title="Compress media files">
+    Reduce file size by resizing, lowering quality, or trimming:
+
+    ```typescript
+    import {
+      Input,
+      Output,
+      Conversion,
+      ALL_FORMATS,
+      BlobSource,
+      BufferTarget,
+      Mp4OutputFormat,
+      QUALITY_LOW,
+    } from 'mediabunny';
+
+    const input = new Input({
+      formats: ALL_FORMATS,
+      source: new BlobSource(file),
+    });
+
+    const output = new Output({
+      format: new Mp4OutputFormat(),
+      target: new BufferTarget(),
+    });
+
+    const conversion = await Conversion.init({
+      input,
+      output,
+      video: track => ({
+        width: 480,
+        bitrate: QUALITY_LOW,
+        discard: track.number > 1, // Keep only the first video track
+      }),
+      audio: track => ({
+        numberOfChannels: 1,
+        bitrate: QUALITY_LOW,
+        discard: track.number > 1, // Keep only the first audio track
+      }),
+      trim: {
+        // Keep only the first 60 seconds
+        start: 0,
+        end: 60,
+      },
+      tags: {}, // Remove any metadata tags
+    });
+
+    await conversion.execute();
+    ```
+
+    See the [File compression example](/examples/file-compression) for a complete demo.
+  </Step>
+
+  <Step title="Record live media">
+    Capture from webcam or microphone and save to a file:
+
+    ```typescript
+    import {
+      Output,
+      BufferTarget,
+      WebMOutputFormat,
+      MediaStreamVideoTrackSource,
+      MediaStreamAudioTrackSource,
+      QUALITY_MEDIUM
+    } from 'mediabunny';
+
+    const userMedia = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    const videoTrack = userMedia.getVideoTracks()[0];
+    const audioTrack = userMedia.getAudioTracks()[0];
+
+    const output = new Output({
+      format: new WebMOutputFormat(),
+      target: new BufferTarget(),
+    });
+
+    if (videoTrack) {
+      const source = new MediaStreamVideoTrackSource(videoTrack, {
+        codec: 'vp9',
+        bitrate: QUALITY_MEDIUM,
+      });
+      output.addVideoTrack(source);
+    }
+
+    if (audioTrack) {
+      const source = new MediaStreamAudioTrackSource(audioTrack, {
+        codec: 'opus',
+        bitrate: QUALITY_MEDIUM,
+      });
+      output.addAudioTrack(source);
+    }
+
+    await output.start();
+
+    // Recording happens automatically...
+    // Stop when ready:
+
+    await output.finalize();
+    ```
+
+    Check out the [Live recording demo](/examples/live-recording) to see this in action.
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've seen the basics, dive deeper into specific topics:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Reading media files" icon="book-open" href="/guide/reading-media-files">
+    Learn about input sources, demuxers, and extracting data
+  </Card>
+  <Card title="Writing media files" icon="pen" href="/guide/writing-media-files">
+    Understand output targets, muxers, and media sources
+  </Card>
+  <Card title="Converting media files" icon="arrows-rotate" href="/guide/converting-media-files">
+    Master transmuxing, transcoding, and conversion options
+  </Card>
+  <Card title="Supported formats" icon="list" href="/guide/supported-formats-and-codecs">
+    See the full list of container formats and codecs
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

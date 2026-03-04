@@ -1,0 +1,533 @@
+---
+title: Packets and Samples
+description: Understanding the difference between compressed packets and raw samples in media processing
+---
+
+In Mediabunny, media data exists in two fundamental forms: **packets** (compressed data) and **samples** (raw data). Understanding when to use each is essential for effective media processing.
+
+## The fundamental difference
+
+<CardGroup cols={2}>
+<Card title="Packets" icon="box-archive">
+Compressed, encoded media data as stored in files. Small, efficient, but not directly usable.
+</Card>
+
+<Card title="Samples" icon="file-image">
+Raw, decoded media data ready for processing. Large, uncompressed, directly manipulable.
+</Card>
+</CardGroup>
+
+Think of it like this:
+- **Packet**: A JPEG image file (compressed, efficient to store)
+- **Sample**: Raw pixel data in memory (uncompressed, ready to edit)
+
+## EncodedPacket
+
+The `EncodedPacket` class represents a chunk of compressed media data - either video or audio.
+
+### Structure
+
+An `EncodedPacket` contains:
+
+```typescript packet.ts:47-87
+export class EncodedPacket {
+  constructor(
+    public readonly data: Uint8Array,        // The compressed bytes
+    public readonly type: PacketType,         // 'key' or 'delta'
+    public readonly timestamp: number,        // Presentation time (seconds)
+    public readonly duration: number,         // Duration (seconds)
+    public readonly sequenceNumber = -1,      // Decode order
+    byteLength?: number,
+    sideData?: EncodedPacketSideData,
+  ) { /* ... */ }
+}
+```
+
+<Accordion title="Field descriptions">
+- **data**: The actual compressed bytes in codec-specific format
+- **type**: `'key'` (can decode independently) or `'delta'` (depends on previous frames)
+- **timestamp**: When this packet should be presented, in seconds
+- **duration**: How long this packet lasts, in seconds
+- **sequenceNumber**: Decode order (lower numbers decode first)
+- **byteLength**: Size of the data (useful for metadata-only packets)
+- **sideData**: Additional data like alpha channel information
+</Accordion>
+
+### Creating packets
+
+You typically create packets from encoded data or WebCodecs API chunks:
+
+<CodeGroup>
+```typescript From bytes
+const packet = new EncodedPacket(
+  encodedData,    // Uint8Array of compressed data
+  'key',          // Key frame
+  1.5,            // Timestamp: 1.5 seconds
+  0.033,          // Duration: ~30fps
+  42              // Sequence number
+);
+```
+
+```typescript From WebCodecs chunk
+const packet = EncodedPacket.fromEncodedChunk(videoChunk);
+```
+</CodeGroup>
+
+### Using packets
+
+Packets are what you read from input files and write to output files:
+
+```typescript
+import { Input, MP4, BlobSource } from 'mediabunny';
+
+const input = new Input({
+  formats: [MP4],
+  source: new BlobSource(file)
+});
+
+const videoTrack = await input.getPrimaryVideoTrack();
+
+// Read packets from the file
+for await (const packet of videoTrack.readPackets()) {
+  console.log('Packet:', {
+    type: packet.type,
+    timestamp: packet.timestamp,
+    duration: packet.duration,
+    size: packet.byteLength
+  });
+  
+  // Packets are compressed - can't directly access pixel data!
+}
+```
+
+### Packet types
+
+<Tabs>
+<Tab title="Key packets">
+**Key packets** (also called I-frames or keyframes) can be decoded independently:
+
+```typescript
+if (packet.type === 'key') {
+  // This packet can be decoded without any previous packets
+  // Perfect for seeking, splitting, or starting playback
+}
+```
+
+<Tip>
+Key packets are larger but essential for random access and seeking in media files.
+</Tip>
+</Tab>
+
+<Tab title="Delta packets">
+**Delta packets** (P-frames, B-frames) depend on other packets for decoding:
+
+```typescript
+if (packet.type === 'delta') {
+  // This packet needs previous (and possibly future) packets to decode
+  // Smaller but requires proper decode order
+}
+```
+
+<Warning>
+Delta packets must be decoded in sequence order, not presentation order. Use `sequenceNumber` to determine decode order.
+</Warning>
+</Tab>
+</Tabs>
+
+### Converting to WebCodecs
+
+Packets can be converted to WebCodecs API types:
+
+<CodeGroup>
+```typescript Video chunk
+const videoChunk = packet.toEncodedVideoChunk();
+await videoDecoder.decode(videoChunk);
+```
+
+```typescript Audio chunk
+const audioChunk = packet.toEncodedAudioChunk();
+await audioDecoder.decode(audioChunk);
+```
+</CodeGroup>
+
+## VideoSample
+
+The `VideoSample` class represents a raw, unencoded video frame with direct pixel data access.
+
+### Structure
+
+A `VideoSample` provides:
+
+```typescript sample.ts:171-210
+export class VideoSample implements Disposable {
+  readonly format: VideoSamplePixelFormat | null;  // Pixel format (I420, RGBA, etc.)
+  readonly visibleRect: Rectangle;                 // Visible region
+  readonly codedWidth: number;                     // Frame width
+  readonly codedHeight: number;                    // Frame height
+  readonly rotation: Rotation;                     // 0, 90, 180, or 270 degrees
+  readonly timestamp: number;                      // Presentation time (seconds)
+  readonly duration: number;                       // Duration (seconds)
+  readonly colorSpace: VideoSampleColorSpace;      // Color space info
+}
+```
+
+### Creating video samples
+
+You can create video samples from various sources:
+
+<CodeGroup>
+```typescript From VideoFrame
+const sample = new VideoSample(videoFrame, {
+  timestamp: 1.5,
+  duration: 0.033,
+  rotation: 90
+});
+```
+
+```typescript From raw pixels
+const sample = new VideoSample(pixelData, {
+  format: 'I420',
+  codedWidth: 1920,
+  codedHeight: 1080,
+  timestamp: 0,
+  duration: 0.033
+});
+```
+
+```typescript From canvas
+const sample = new VideoSample(canvas, {
+  timestamp: 2.0
+});
+```
+</CodeGroup>
+
+### Pixel formats
+
+Mediabunny supports 21 pixel formats:
+
+```typescript sample.ts:86-121
+export const VIDEO_SAMPLE_PIXEL_FORMATS = [
+  // 4:2:0 Y, U, V
+  'I420', 'I420P10', 'I420P12',
+  // 4:2:0 Y, U, V, A (with alpha)
+  'I420A', 'I420AP10', 'I420AP12',
+  // 4:2:2 Y, U, V
+  'I422', 'I422P10', 'I422P12',
+  // 4:2:2 Y, U, V, A
+  'I422A', 'I422AP10', 'I422AP12',
+  // 4:4:4 Y, U, V
+  'I444', 'I444P10', 'I444P12',
+  // 4:4:4 Y, U, V, A
+  'I444A', 'I444AP10', 'I444AP12',
+  // 4:2:0 Y, UV
+  'NV12',
+  // 4:4:4 RGBA
+  'RGBA', 'RGBX', 'BGRA', 'BGRX',
+] as const;
+```
+
+<Accordion title="Understanding pixel formats">
+- **I420**: Most common format for video encoding (4:2:0 subsampling)
+- **I420P10/P12**: 10-bit and 12-bit variants for HDR content
+- **I420A**: I420 with alpha channel for transparency
+- **RGBA/BGRA**: Full-color formats with alpha, useful for graphics
+- **RGBX/BGRX**: Opaque RGB formats
+- **NV12**: Efficient format used by many hardware decoders
+</Accordion>
+
+### Working with video samples
+
+<Tabs>
+<Tab title="Reading pixels">
+Access raw pixel data from a sample:
+
+```typescript
+const sample = await videoTrack.readSample();
+
+// Get buffer size needed
+const size = sample.allocationSize();
+
+// Copy pixels to buffer
+const buffer = new Uint8Array(size);
+const layout = await sample.copyTo(buffer);
+
+console.log('Pixel data copied:', buffer.length, 'bytes');
+console.log('Plane layout:', layout);
+```
+</Tab>
+
+<Tab title="Drawing to canvas">
+Draw a video sample to a 2D canvas:
+
+```typescript
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+
+canvas.width = sample.displayWidth;
+canvas.height = sample.displayHeight;
+
+// Draw the sample (rotation is handled automatically)
+sample.draw(ctx, 0, 0);
+```
+</Tab>
+
+<Tab title="Advanced drawing">
+Use advanced drawing with fit modes:
+
+```typescript
+sample.drawWithFit(ctx, {
+  fit: 'contain',  // or 'cover', 'fill'
+  rotation: 90,    // Override rotation
+  crop: {          // Crop region
+    left: 100,
+    top: 100,
+    width: 800,
+    height: 600
+  }
+});
+```
+</Tab>
+</Tabs>
+
+### Converting to VideoFrame
+
+Convert a sample to WebCodecs VideoFrame:
+
+```typescript
+const videoFrame = sample.toVideoFrame();
+await videoEncoder.encode(videoFrame);
+videoFrame.close(); // Don't forget to close!
+```
+
+### Resource management
+
+<Warning>
+Video samples hold resources that must be explicitly freed:
+</Warning>
+
+```typescript
+const sample = await videoTrack.readSample();
+
+// Use the sample
+processSample(sample);
+
+// ALWAYS close when done
+sample.close();
+
+// Or use explicit resource management
+using sample = await videoTrack.readSample();
+// Automatically closed at end of scope
+```
+
+## AudioSample
+
+The `AudioSample` class represents raw, unencoded audio data with direct PCM access.
+
+### Structure
+
+An `AudioSample` provides:
+
+```typescript sample.ts:1366-1391
+export class AudioSample implements Disposable {
+  readonly format: AudioSampleFormat;          // Sample format (f32, s16, etc.)
+  readonly sampleRate: number;                 // Sample rate in Hz
+  readonly numberOfFrames: number;             // Length in frames
+  readonly numberOfChannels: number;           // Channel count
+  readonly duration: number;                   // Duration (seconds)
+  readonly timestamp: number;                  // Presentation time (seconds)
+}
+```
+
+### Creating audio samples
+
+<CodeGroup>
+```typescript From AudioData
+const sample = new AudioSample(audioData);
+```
+
+```typescript From raw bytes
+const sample = new AudioSample({
+  data: pcmData,
+  format: 'f32',
+  numberOfChannels: 2,
+  sampleRate: 48000,
+  timestamp: 0
+});
+```
+</CodeGroup>
+
+### Audio formats
+
+Supported audio sample formats:
+
+```typescript
+type AudioSampleFormat = 
+  | 'f32' | 'f32-planar'       // 32-bit float
+  | 's16' | 's16-planar'       // 16-bit signed int
+  | 's32' | 's32-planar'       // 32-bit signed int  
+  | 'u8'  | 'u8-planar';       // 8-bit unsigned int
+```
+
+<Info>
+Planar formats store each channel separately, while non-planar formats interleave channels.
+</Info>
+
+### Working with audio samples
+
+<Tabs>
+<Tab title="Reading audio data">
+```typescript
+const sample = await audioTrack.readSample();
+
+// Get buffer size for stereo output
+const size = sample.allocationSize({
+  planeIndex: 0,
+  format: 'f32'  // Convert to float32
+});
+
+// Copy audio data
+const buffer = new ArrayBuffer(size);
+sample.copyTo(buffer, {
+  planeIndex: 0,
+  format: 'f32',
+  frameOffset: 0,
+  frameCount: sample.numberOfFrames
+});
+```
+</Tab>
+
+<Tab title="Converting formats">
+```typescript
+// Read as interleaved float32
+sample.copyTo(buffer, {
+  planeIndex: 0,
+  format: 'f32'
+});
+
+// Read as planar int16, left channel only
+sample.copyTo(buffer, {
+  planeIndex: 0,  // Left channel
+  format: 's16-planar'
+});
+```
+</Tab>
+</Tabs>
+
+### Converting to AudioData
+
+```typescript
+const audioData = sample.toAudioData();
+await audioEncoder.encode(audioData);
+audioData.close();
+```
+
+### Resource management
+
+<Warning>
+Like video samples, audio samples must be closed:
+</Warning>
+
+```typescript
+const sample = await audioTrack.readSample();
+processAudio(sample);
+sample.close();
+
+// Or use explicit resource management
+using sample = await audioTrack.readSample();
+```
+
+## When to use packets vs samples
+
+Choose the right data type for your use case:
+
+<Tabs>
+<Tab title="Use Packets">
+**Use EncodedPacket when you:**
+
+✅ Copy/remux media without re-encoding  
+✅ Need efficient storage and transfer  
+✅ Don't need to manipulate pixel/audio data  
+✅ Want to preserve original encoding quality
+
+```typescript
+// Remuxing: packets in, packets out (fast)
+for await (const packet of inputTrack.readPackets()) {
+  outputSource.addPacket(packet);
+}
+```
+</Tab>
+
+<Tab title="Use Samples">
+**Use VideoSample/AudioSample when you:**
+
+✅ Need to decode and process raw media data  
+✅ Apply filters, effects, or transformations  
+✅ Draw video frames to canvas  
+✅ Analyze audio waveforms  
+✅ Transcode to different codecs
+
+```typescript
+// Processing: decode to samples, manipulate, re-encode
+for await (const sample of inputTrack.readSamples()) {
+  const processed = applyFilter(sample);
+  await encoder.encode(processed.toVideoFrame());
+  sample.close();
+  processed.close();
+}
+```
+</Tab>
+</Tabs>
+
+## Performance considerations
+
+<CardGroup cols={2}>
+<Card title="Packets" icon="gauge-high">
+- Very fast (no encoding/decoding)
+- Low memory usage
+- Perfect for remuxing
+- Limited processing options
+</Card>
+
+<Card title="Samples" icon="gauge-low">
+- Slower (requires decode/encode)
+- High memory usage
+- Full pixel/audio access
+- Enables rich processing
+</Card>
+</CardGroup>
+
+### Example: Remuxing (fast)
+
+```typescript
+// Copy MP4 to WebM without re-encoding
+for await (const packet of videoTrack.readPackets()) {
+  outputVideoSource.addPacket(packet);  // Direct packet copy
+}
+```
+
+### Example: Transcoding (slower)
+
+```typescript
+// Convert H.264 to VP9 (requires decode + encode)
+const decoder = new VideoDecoder({ /* ... */ });
+const encoder = new VideoEncoder({ /* ... */ });
+
+for await (const sample of videoTrack.readSamples()) {
+  const frame = sample.toVideoFrame();
+  await encoder.encode(frame);  // Re-encode to VP9
+  frame.close();
+  sample.close();
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+<Card title="Input and Output" href="/concepts/input-output" icon="arrows-left-right">
+Learn how to read packets and samples from files
+</Card>
+
+<Card title="Encoding and Decoding" href="/encoding-decoding" icon="code">
+Convert between packets and samples
+</Card>
+</CardGroup>

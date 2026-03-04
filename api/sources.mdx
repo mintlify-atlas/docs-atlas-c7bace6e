@@ -1,0 +1,287 @@
+---
+title: Sources
+description: Source classes for reading input data from various locations
+---
+
+## Source
+
+The base class representing a resource from which bytes can be read.
+
+### Methods
+
+<ResponseField name="getSize" type="Promise<number>">
+  Returns the total size of the file in bytes. This function is memoized, meaning only the first call will retrieve the size.
+  
+  Throws an error if the source is unsized.
+</ResponseField>
+
+<ResponseField name="getSizeOrNull" type="Promise<number | null>">
+  Returns the total size of the file in bytes, or null if the source is unsized. This function is memoized.
+</ResponseField>
+
+<ResponseField name="onread" type="((start: number, end: number) => unknown) | null">
+  Called each time data is retrieved from the source. Will be called with the retrieved range (end exclusive).
+</ResponseField>
+
+---
+
+## BufferSource
+
+A source backed by an ArrayBuffer or ArrayBufferView, with the entire file held in memory.
+
+### Constructor
+
+```typescript
+new BufferSource(buffer: AllowSharedBufferSource)
+```
+
+<ParamField path="buffer" type="ArrayBuffer | SharedArrayBuffer | ArrayBufferView" required>
+  The buffer to use as the source data.
+</ParamField>
+
+### Example
+
+```typescript
+const buffer = new Uint8Array([1, 2, 3, 4, 5]);
+const source = new BufferSource(buffer);
+```
+
+---
+
+## BlobSource
+
+A source backed by a [`Blob`](https://developer.mozilla.org/en-US/docs/Web/API/Blob). Since a [`File`](https://developer.mozilla.org/en-US/docs/Web/API/File) is also a `Blob`, this is the source to use when reading files off the disk in the browser.
+
+### Constructor
+
+```typescript
+new BlobSource(blob: Blob, options?: BlobSourceOptions)
+```
+
+<ParamField path="blob" type="Blob" required>
+  The Blob to use as the source.
+</ParamField>
+
+<ParamField path="options" type="BlobSourceOptions">
+  Optional configuration.
+</ParamField>
+
+### Options
+
+<ParamField path="options.maxCacheSize" type="number" default="8388608">
+  The maximum number of bytes the cache is allowed to hold in memory. Defaults to 8 MiB.
+</ParamField>
+
+### Example
+
+```typescript
+const blob = new Blob([new Uint8Array([1, 2, 3])]);
+const source = new BlobSource(blob, { maxCacheSize: 16 * 1024 * 1024 });
+```
+
+---
+
+## UrlSource
+
+A source backed by a URL. This is useful for reading data from the network. Requests will be made using an optimized reading and prefetching pattern to minimize request count and latency.
+
+### Constructor
+
+```typescript
+new UrlSource(url: string | URL | Request, options?: UrlSourceOptions)
+```
+
+<ParamField path="url" type="string | URL | Request" required>
+  The URL to fetch data from.
+</ParamField>
+
+<ParamField path="options" type="UrlSourceOptions">
+  Optional configuration.
+</ParamField>
+
+### Options
+
+<ParamField path="options.requestInit" type="RequestInit">
+  The [`RequestInit`](https://developer.mozilla.org/en-US/docs/Web/API/RequestInit) used by the Fetch API. Can be used to further control the requests, such as setting custom headers.
+  
+  All fields will work except for `signal` and `headers.Range`; these will be overridden by Mediabunny.
+</ParamField>
+
+<ParamField path="options.getRetryDelay" type="(previousAttempts: number, error: unknown, url: string | URL | Request) => number | null">
+  A function that returns the delay (in seconds) before retrying a failed request. If the function returns `null`, no more retries will be made.
+  
+  By default, uses an exponential backoff algorithm that never gives up unless a CORS error is suspected.
+</ParamField>
+
+<ParamField path="options.maxCacheSize" type="number" default="67108864">
+  The maximum number of bytes the cache is allowed to hold in memory. Defaults to 64 MiB.
+</ParamField>
+
+<ParamField path="options.parallelism" type="number" default="2">
+  The maximum number of parallel requests to use for fetching. Defaults to 2.
+</ParamField>
+
+<ParamField path="options.fetchFn" type="typeof fetch">
+  A WHATWG-compatible fetch function. You can use this field to polyfill the `fetch` function, add missing features, or use a custom implementation.
+</ParamField>
+
+### Example
+
+```typescript
+const source = new UrlSource('https://example.com/video.mp4', {
+  requestInit: {
+    headers: {
+      'Authorization': 'Bearer token'
+    }
+  },
+  parallelism: 4
+});
+```
+
+---
+
+## FilePathSource
+
+A source backed by a path to a file. Intended for server-side usage in Node, Bun, or Deno.
+
+<Note>
+  Make sure to call `.dispose()` on the corresponding `Input` when done to explicitly free the internal file handle acquired by this source.
+</Note>
+
+### Constructor
+
+```typescript
+new FilePathSource(filePath: string, options?: FilePathSourceOptions)
+```
+
+<ParamField path="filePath" type="string" required>
+  The path to the file to read.
+</ParamField>
+
+<ParamField path="options" type="FilePathSourceOptions">
+  Optional configuration.
+</ParamField>
+
+### Options
+
+<ParamField path="options.maxCacheSize" type="number" default="8388608">
+  The maximum number of bytes the cache is allowed to hold in memory. Defaults to 8 MiB.
+</ParamField>
+
+### Example
+
+```typescript
+const source = new FilePathSource('./video.mp4');
+const input = new Input(source);
+
+// ... use the input
+
+input.dispose(); // Important: free the file handle
+```
+
+---
+
+## StreamSource
+
+A general-purpose, callback-driven source that can get its data from anywhere.
+
+### Constructor
+
+```typescript
+new StreamSource(options: StreamSourceOptions)
+```
+
+<ParamField path="options" type="StreamSourceOptions" required>
+  Configuration for the stream source.
+</ParamField>
+
+### Options
+
+<ParamField path="options.getSize" type="() => MaybePromise<number>" required>
+  Called when the size of the entire file is requested. Must return or resolve to the size in bytes. This function is guaranteed to be called before `read`.
+</ParamField>
+
+<ParamField path="options.read" type="(start: number, end: number) => MaybePromise<Uint8Array | ReadableStream<Uint8Array>>" required>
+  Called when data is requested. Must return or resolve to the bytes from the specified byte range, or a stream that yields these bytes.
+</ParamField>
+
+<ParamField path="options.dispose" type="() => unknown">
+  Called when the `Input` driven by this source is disposed.
+</ParamField>
+
+<ParamField path="options.maxCacheSize" type="number" default="8388608">
+  The maximum number of bytes the cache is allowed to hold in memory. Defaults to 8 MiB.
+</ParamField>
+
+<ParamField path="options.prefetchProfile" type="'none' | 'fileSystem' | 'network'" default="'none'">
+  Specifies the prefetch profile that the reader should use with this source.
+  
+  - `'none'`: No prefetching; only the data needed in the moment is requested.
+  - `'fileSystem'`: File system-optimized prefetching with small bidirectional prefetching aligned with page boundaries.
+  - `'network'`: Network-optimized prefetching for high-latency environments; minimizes read calls and aggressively prefetches data when sequential access patterns are detected.
+</ParamField>
+
+### Example
+
+```typescript
+const source = new StreamSource({
+  getSize: async () => {
+    return 1024 * 1024; // 1 MB
+  },
+  read: async (start, end) => {
+    const data = new Uint8Array(end - start);
+    // Fill data from your custom source
+    return data;
+  },
+  dispose: () => {
+    // Clean up resources
+  },
+  prefetchProfile: 'network'
+});
+```
+
+---
+
+## ReadableStreamSource
+
+A source backed by a [`ReadableStream`](https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream) of `Uint8Array`, representing an append-only byte stream of unknown length. This is useful for incrementally streaming in input files that are still being constructed, like the output chunks of [MediaRecorder](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder).
+
+<Note>
+  This source is **unsized**, meaning calls to `.getSize()` will throw. You should only use this source with sequential access patterns. This source does not work well with random access patterns unless you increase its max cache size.
+</Note>
+
+### Constructor
+
+```typescript
+new ReadableStreamSource(stream: ReadableStream<Uint8Array>, options?: ReadableStreamSourceOptions)
+```
+
+<ParamField path="stream" type="ReadableStream<Uint8Array>" required>
+  The readable stream to use as the source.
+</ParamField>
+
+<ParamField path="options" type="ReadableStreamSourceOptions">
+  Optional configuration.
+</ParamField>
+
+### Options
+
+<ParamField path="options.maxCacheSize" type="number" default="16777216">
+  The maximum number of bytes the cache is allowed to hold in memory. Defaults to 16 MiB.
+</ParamField>
+
+### Example
+
+```typescript
+const stream = new ReadableStream({
+  start(controller) {
+    controller.enqueue(new Uint8Array([1, 2, 3]));
+    controller.enqueue(new Uint8Array([4, 5, 6]));
+    controller.close();
+  }
+});
+
+const source = new ReadableStreamSource(stream, {
+  maxCacheSize: 32 * 1024 * 1024
+});
+```

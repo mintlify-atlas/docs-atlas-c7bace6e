@@ -1,0 +1,311 @@
+---
+title: Metadata
+description: Learn how to read and write metadata tags like title, artist, album, and cover art
+---
+
+Mediabunny allows you to read and write descriptive metadata tags about media files, such as title, author, date, cover art, and other attached files. Common tags are normalized into a uniform format across different container formats.
+
+## Reading metadata tags
+
+You can retrieve metadata tags from an input file:
+
+```typescript
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+
+const input = new Input({
+  source: new BlobSource(file),
+  formats: ALL_FORMATS,
+});
+
+const tags = await input.getMetadataTags();
+```
+
+## Available metadata fields
+
+### Basic information
+
+```typescript
+const tags = await input.getMetadataTags();
+
+tags.title;        // Title of the media (e.g., "Gangnam Style")
+tags.description;  // Short description or subtitle
+tags.artist;       // Primary artist(s) or creator(s)
+tags.album;        // Album, collection, or compilation
+tags.albumArtist;  // Main credited artist for the album
+tags.genre;        // Genre or category (e.g., "Metal", "Horror")
+tags.date;         // Release or recording date (Date object)
+tags.lyrics;       // Full text lyrics or transcript
+tags.comment;      // Freeform notes or commentary
+```
+
+### Track and disc numbers
+
+```typescript
+tags.trackNumber;  // Position in album (1-based)
+tags.tracksTotal;  // Total tracks in album
+tags.discNumber;   // Disc index for multi-disc releases (1-based)
+tags.discsTotal;   // Total number of discs
+```
+
+### Images and cover art
+
+```typescript
+const images = tags.images; // AttachedImage[]
+
+if (images && images.length > 0) {
+  const coverArt = images[0];
+  
+  coverArt.data;        // Uint8Array - raw image data
+  coverArt.mimeType;    // 'image/jpeg', 'image/png', etc.
+  coverArt.kind;        // 'coverFront' | 'coverBack' | 'unknown'
+  coverArt.name;        // Optional file name
+  coverArt.description; // Optional description
+  
+  // Display the image
+  const blob = new Blob([coverArt.data], { type: coverArt.mimeType });
+  const url = URL.createObjectURL(blob);
+  imgElement.src = url;
+}
+```
+
+### Raw metadata
+
+The `raw` field contains the underlying metadata tags, which differ by format:
+
+```typescript
+tags.raw; // Record<string, string | Uint8Array | RichImageData | AttachedFile | null>
+```
+
+This is useful for:
+- Accessing format-specific metadata that Mediabunny doesn't normalize
+- Preserving all original metadata when converting files
+- Writing custom metadata tags
+
+## Writing metadata tags
+
+You can write metadata tags when creating an output file:
+
+```typescript
+import { Output, Mp4OutputFormat, BufferTarget } from 'mediabunny';
+
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new BufferTarget(),
+});
+
+output.setMetadataTags({
+  title: 'Big Buck Bunny',
+  artist: 'Blender Foundation',
+  date: new Date('2008-05-20'),
+  genre: 'Animation',
+  comment: 'Open source animated short film',
+});
+
+// Add tracks...
+await output.start();
+// ...
+```
+
+<Warning>
+  Metadata tags must be set before calling `output.start()`.
+</Warning>
+
+## Adding cover art
+
+To add cover art or other images to a media file:
+
+```typescript
+// Read image data
+const response = await fetch('/cover.jpg');
+const arrayBuffer = await response.arrayBuffer();
+const imageData = new Uint8Array(arrayBuffer);
+
+output.setMetadataTags({
+  title: 'My Song',
+  artist: 'My Band',
+  images: [
+    {
+      data: imageData,
+      mimeType: 'image/jpeg',
+      kind: 'coverFront',
+      name: 'cover.jpg',
+      description: 'Album cover',
+    },
+  ],
+});
+```
+
+## Metadata in conversions
+
+When converting files, you can control how metadata is handled:
+
+<Tabs>
+  <Tab title="Copy from input">
+    By default, metadata is copied from input to output:
+    
+    ```typescript
+    const conversion = await Conversion.init({
+      input,
+      output,
+      // tags are automatically copied
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Set custom tags">
+    Override with your own metadata:
+    
+    ```typescript
+    const conversion = await Conversion.init({
+      input,
+      output,
+      tags: {
+        title: 'New Title',
+        artist: 'New Artist',
+      },
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Modify input tags">
+    Augment or modify the input's metadata:
+    
+    ```typescript
+    const conversion = await Conversion.init({
+      input,
+      output,
+      tags: (inputTags) => ({
+        ...inputTags,
+        // Add cover art
+        images: [{
+          data: coverImageBytes,
+          mimeType: 'image/jpeg',
+          kind: 'coverFront',
+        }],
+        // Remove comments
+        comment: undefined,
+      }),
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Remove all tags">
+    Strip all metadata:
+    
+    ```typescript
+    const conversion = await Conversion.init({
+      input,
+      output,
+      tags: {}, // Empty object removes all tags
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Format-specific metadata
+
+Metadata is stored differently in each container format:
+
+<Tabs>
+  <Tab title="MP4/QuickTime">
+    - Metadata in `'moov'`-level `'udta'` and `'meta'` atoms
+    - `raw` field contains atom names as keys
+    - Values derived from `'data'` atom content
+  </Tab>
+  
+  <Tab title="WebM/Matroska">
+    - `SimpleTag` elements with target 50 (MOVIE)
+    - Attachments include font files and other embedded files
+    - `raw` field includes attached files with FileUID as key
+  </Tab>
+  
+  <Tab title="MP3">
+    - ID3v2 or ID3v1 tags
+    - `raw` field contains ID3 frame identifiers
+  </Tab>
+  
+  <Tab title="Ogg">
+    - Vorbis-style comment headers (RFC 7845)
+    - `raw` field includes `'vendor'` key for vendor string
+  </Tab>
+  
+  <Tab title="FLAC">
+    - Vorbis metadata block (RFC 9639)
+    - `raw` field includes `'vendor'` key
+  </Tab>
+  
+  <Tab title="WAVE">
+    - RIFF INFO chunk
+    - Values are ISO 8859-1 strings
+  </Tab>
+</Tabs>
+
+## Example: Display all metadata
+
+```typescript
+import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+
+const input = new Input({
+  source: new BlobSource(file),
+  formats: ALL_FORMATS,
+});
+
+const tags = await input.getMetadataTags();
+
+console.log('Title:', tags.title);
+console.log('Artist:', tags.artist);
+console.log('Album:', tags.album);
+console.log('Date:', tags.date?.toISOString());
+console.log('Genre:', tags.genre);
+
+if (tags.images && tags.images.length > 0) {
+  console.log(`Found ${tags.images.length} image(s)`);
+  
+  tags.images.forEach((image, index) => {
+    console.log(`Image ${index + 1}:`, {
+      kind: image.kind,
+      mimeType: image.mimeType,
+      size: image.data.byteLength,
+    });
+  });
+}
+
+if (tags.raw) {
+  console.log('Raw metadata keys:', Object.keys(tags.raw));
+}
+```
+
+## Example: Add metadata to a new file
+
+```typescript
+import { Output, Mp4OutputFormat, BufferTarget } from 'mediabunny';
+
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new BufferTarget(),
+});
+
+// Fetch album cover
+const coverResponse = await fetch('/album-cover.jpg');
+const coverData = new Uint8Array(await coverResponse.arrayBuffer());
+
+output.setMetadataTags({
+  title: 'My Amazing Song',
+  artist: 'The Band Name',
+  album: 'The Album Title',
+  albumArtist: 'The Band Name',
+  trackNumber: 3,
+  tracksTotal: 12,
+  date: new Date('2024-01-15'),
+  genre: 'Rock',
+  images: [
+    {
+      data: coverData,
+      mimeType: 'image/jpeg',
+      kind: 'coverFront',
+    },
+  ],
+});
+
+// Add tracks and finalize...
+```

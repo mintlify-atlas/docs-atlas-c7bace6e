@@ -1,0 +1,390 @@
+---
+title: Input formats
+description: Classes and utilities for reading media files in various formats
+---
+
+## InputFormat
+
+Base class representing an input media file format.
+
+```typescript
+abstract class InputFormat
+```
+
+### Properties
+
+<ResponseField name="name" type="string">
+  Returns the name of the input format.
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns the typical base MIME type of the input format.
+</ResponseField>
+
+---
+
+## Format classes
+
+### Mp4InputFormat
+
+MPEG-4 Part 14 (MP4) file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `MP4` singleton instead.
+</Note>
+
+```typescript
+class Mp4InputFormat extends IsobmffInputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'MP4'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'video/mp4'`
+</ResponseField>
+
+---
+
+### QuickTimeInputFormat
+
+QuickTime File Format (QTFF), often called MOV.
+
+<Note>
+  Do not instantiate this class directly. Use the `QTFF` singleton instead.
+</Note>
+
+```typescript
+class QuickTimeInputFormat extends IsobmffInputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'QuickTime File Format'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'video/quicktime'`
+</ResponseField>
+
+---
+
+### MatroskaInputFormat
+
+Matroska file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `MATROSKA` singleton instead.
+</Note>
+
+```typescript
+class MatroskaInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'Matroska'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'video/x-matroska'`
+</ResponseField>
+
+---
+
+### WebMInputFormat
+
+WebM file format, based on Matroska.
+
+<Note>
+  Do not instantiate this class directly. Use the `WEBM` singleton instead.
+</Note>
+
+```typescript
+class WebMInputFormat extends MatroskaInputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'WebM'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'video/webm'`
+</ResponseField>
+
+---
+
+### Mp3InputFormat
+
+MP3 file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `MP3` singleton instead.
+</Note>
+
+```typescript
+class Mp3InputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'MP3'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'audio/mpeg'`
+</ResponseField>
+
+---
+
+### WaveInputFormat
+
+WAVE file format, based on RIFF.
+
+<Note>
+  Do not instantiate this class directly. Use the `WAVE` singleton instead.
+</Note>
+
+```typescript
+class WaveInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'WAVE'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'audio/wav'`
+</ResponseField>
+
+---
+
+### OggInputFormat
+
+Ogg file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `OGG` singleton instead.
+</Note>
+
+```typescript
+class OggInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'Ogg'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'application/ogg'`
+</ResponseField>
+
+---
+
+### FlacInputFormat
+
+FLAC file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `FLAC` singleton instead.
+</Note>
+
+```typescript
+class FlacInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'FLAC'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'audio/flac'`
+</ResponseField>
+
+---
+
+### AdtsInputFormat
+
+ADTS file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `ADTS` singleton instead.
+</Note>
+
+```typescript
+class AdtsInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'ADTS'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'audio/aac'`
+</ResponseField>
+
+---
+
+### MpegTsInputFormat
+
+MPEG Transport Stream (MPEG-TS) file format.
+
+<Note>
+  Do not instantiate this class directly. Use the `MPEG_TS` singleton instead.
+</Note>
+
+```typescript
+class MpegTsInputFormat extends InputFormat
+```
+
+#### Properties
+
+<ResponseField name="name" type="string">
+  Returns `'MPEG Transport Stream'`
+</ResponseField>
+
+<ResponseField name="mimeType" type="string">
+  Returns `'video/MP2T'`
+</ResponseField>
+
+---
+
+## Format singletons
+
+### MP4
+
+MP4 input format singleton.
+
+```typescript
+const MP4: Mp4InputFormat
+```
+
+---
+
+### QTFF
+
+QuickTime File Format input format singleton.
+
+```typescript
+const QTFF: QuickTimeInputFormat
+```
+
+---
+
+### MATROSKA
+
+Matroska input format singleton.
+
+```typescript
+const MATROSKA: MatroskaInputFormat
+```
+
+---
+
+### WEBM
+
+WebM input format singleton.
+
+```typescript
+const WEBM: WebMInputFormat
+```
+
+---
+
+### MP3
+
+MP3 input format singleton.
+
+```typescript
+const MP3: Mp3InputFormat
+```
+
+---
+
+### WAVE
+
+WAVE input format singleton.
+
+```typescript
+const WAVE: WaveInputFormat
+```
+
+---
+
+### OGG
+
+Ogg input format singleton.
+
+```typescript
+const OGG: OggInputFormat
+```
+
+---
+
+### ADTS
+
+ADTS input format singleton.
+
+```typescript
+const ADTS: AdtsInputFormat
+```
+
+---
+
+### FLAC
+
+FLAC input format singleton.
+
+```typescript
+const FLAC: FlacInputFormat
+```
+
+---
+
+### MPEG_TS
+
+MPEG-TS input format singleton.
+
+```typescript
+const MPEG_TS: MpegTsInputFormat
+```
+
+---
+
+## ALL_FORMATS
+
+List of all input format singletons. If you don't need to support all input formats, you should specify the formats individually for better tree shaking.
+
+```typescript
+const ALL_FORMATS: InputFormat[]
+```
+
+### Value
+
+```typescript
+[MP4, QTFF, MATROSKA, WEBM, WAVE, OGG, FLAC, MP3, ADTS, MPEG_TS]
+```
+
+### Example
+
+```typescript
+import { Input, ALL_FORMATS } from 'mediabunny';
+
+const input = new Input(file, { formats: ALL_FORMATS });
+```

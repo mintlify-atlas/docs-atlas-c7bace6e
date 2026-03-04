@@ -1,0 +1,615 @@
+---
+title: Performance
+description: Performance best practices and optimization techniques
+---
+
+Mediabunny is designed for high performance from the ground up. This guide covers best practices and optimization techniques to get the most out of the library.
+
+## Core design principles
+
+Mediabunny's architecture is built around several key performance principles:
+
+<CardGroup cols={2}>
+  <Card title="Tree-shakable" icon="tree">
+    Only bundle what you use. Format-specific code is automatically excluded when not imported.
+  </Card>
+  
+  <Card title="Pipelined" icon="diagram-project">
+    Streaming design keeps memory usage constant regardless of file size.
+  </Card>
+  
+  <Card title="Lazy evaluation" icon="hourglass">
+    Work is deferred until needed, minimizing unnecessary processing.
+  </Card>
+  
+  <Card title="Hardware accelerated" icon="microchip">
+    WebCodecs API provides native hardware encoding/decoding when available.
+  </Card>
+</CardGroup>
+
+## Tree-shaking benefits
+
+Mediabunny is highly modular. Only the code you import gets bundled:
+
+<Tabs>
+  <Tab title="Minimal bundle">
+    ```typescript
+    // Only MP4 reading - ~15 KB gzipped
+    import { Input, Mp4InputFormat, BlobSource } from 'mediabunny';
+    
+    const input = new Input({
+      source: new BlobSource(file),
+      formats: [new Mp4InputFormat()],
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Medium bundle">
+    ```typescript
+    // MP4 + WebM reading - ~25 KB gzipped
+    import {
+      Input,
+      Mp4InputFormat,
+      WebMInputFormat,
+      BlobSource,
+    } from 'mediabunny';
+    
+    const input = new Input({
+      source: new BlobSource(file),
+      formats: [new Mp4InputFormat(), new WebMInputFormat()],
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Full bundle">
+    ```typescript
+    // All formats - ~50 KB gzipped
+    import { Input, ALL_FORMATS, BlobSource } from 'mediabunny';
+    
+    const input = new Input({
+      source: new BlobSource(file),
+      formats: ALL_FORMATS,
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+Only import the formats you actually need to minimize bundle size. If you only work with MP4 files, there's no reason to include WebM or Matroska support.
+</Tip>
+
+## Pipelined design
+
+Mediabunny uses a pipelined architecture that processes data in a streaming fashion:
+
+```mermaid
+graph LR
+    A[Source] --> B[Encoder]
+    B --> C[Muxer]
+    C --> D[Writer]
+    D --> E[Target]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#f0e1ff
+    style D fill:#e1ffe1
+    style E fill:#ffe1e1
+```
+
+Each stage:
+- Processes data as it arrives
+- Maintains a small buffer
+- Applies backpressure when needed
+- Runs in parallel with other stages
+
+**Benefits:**
+- Memory usage stays constant
+- Large files can be processed
+- Encoding starts immediately
+- No waiting for entire file
+
+### Respecting backpressure
+
+Backpressure prevents memory buildup when downstream stages can't keep up:
+
+```typescript
+// Wrong - ignores backpressure, can cause memory issues
+for (let i = 0; i < 10000; i++) {
+  canvasSource.add(i * 0.033, 0.033);
+}
+
+// Correct - respects backpressure
+for (let i = 0; i < 10000; i++) {
+  await canvasSource.add(i * 0.033, 0.033);
+}
+```
+
+<Warning>
+Always `await` media source `add()` calls. Not doing so can cause unbounded memory growth and encoder queue overflow.
+</Warning>
+
+## Hardware acceleration
+
+Mediabunny leverages the WebCodecs API for hardware-accelerated encoding and decoding:
+
+```typescript
+const videoSource = new VideoSampleSource({
+  codec: 'avc',
+  bitrate: 5e6,
+  hardwareAcceleration: 'prefer-hardware', // Default: 'no-preference'
+});
+```
+
+<Info>
+In most cases, leave `hardwareAcceleration` at `'no-preference'` and let the browser decide. Browsers are generally good at choosing the best encoder.
+</Info>
+
+**Hardware acceleration availability:**
+- **Desktop Chrome/Edge:** Excellent support for AVC, HEVC, VP9, AV1
+- **Desktop Safari:** Good support for AVC, HEVC
+- **Desktop Firefox:** Software-only in most cases
+- **Mobile browsers:** Generally good hardware support
+
+### Checking encoder support
+
+Before creating an encoder, check if hardware acceleration is available:
+
+```typescript
+const config = {
+  codec: 'avc1.42001f',
+  width: 1920,
+  height: 1080,
+  bitrate: 5e6,
+  hardwareAcceleration: 'prefer-hardware',
+};
+
+const support = await VideoEncoder.isConfigSupported(config);
+if (!support.supported) {
+  console.warn('Hardware encoder not available, falling back to software');
+  config.hardwareAcceleration = 'prefer-software';
+}
+```
+
+## Memory optimization
+
+### Close resources promptly
+
+Always close VideoFrames, VideoSamples, and AudioSamples when done:
+
+```typescript
+// Reading
+for await (const sample of sink.samples()) {
+  // Process sample
+  sample.close(); // Critical!
+}
+
+// Writing
+const sample = new VideoSample(frame);
+await source.add(sample);
+sample.close(); // Don't forget!
+```
+
+<Warning>
+Failing to close samples causes memory leaks. VideoFrames hold GPU memory that must be explicitly released.
+</Warning>
+
+### Close sources early
+
+Close media sources as soon as you're done adding data:
+
+```typescript
+const videoSource = new CanvasSource(canvas, config);
+
+for (let i = 0; i < frameCount; i++) {
+  await videoSource.add(i * frameDuration, frameDuration);
+}
+
+videoSource.close(); // Signals no more data, allows muxer to optimize
+```
+
+**Benefits:**
+- Reduces packet buffering
+- Allows muxer to optimize other tracks
+- Lowers overall memory usage
+
+### Use canvas pooling
+
+When using `CanvasSink`, enable canvas pooling to reuse canvases:
+
+```typescript
+// Without pooling - allocates new canvas each time
+const sink = new CanvasSink(videoTrack);
+
+// With pooling - reuses canvases from pool
+const sink = new CanvasSink(videoTrack, { poolSize: 3 });
+```
+
+For sequential iteration, `poolSize: 1` is optimal:
+
+```typescript
+const sink = new CanvasSink(videoTrack, { poolSize: 1 });
+
+for await (const { canvas } of sink.canvases()) {
+  // Same canvas reused each iteration
+  await processCanvas(canvas);
+}
+```
+
+### Stream large files
+
+Use streaming I/O for large files:
+
+```typescript
+// Input
+const input = new Input({
+  source: new BlobSource(file), // Streams from blob
+  formats: [new Mp4InputFormat()],
+});
+
+// Output
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new StreamTarget({    // Streams to downloadable file
+    onProgress: (bytes) => console.log(`Written: ${bytes} bytes`),
+  }),
+});
+```
+
+<Tip>
+`StreamTarget` automatically triggers a browser download as data is written, keeping memory usage low.
+</Tip>
+
+## Encoding/decoding optimization
+
+### Choose appropriate bitrates
+
+Use quality presets or calculate bitrates based on resolution:
+
+```typescript
+import { QUALITY_HIGH, QUALITY_MEDIUM } from 'mediabunny';
+
+// Quality presets (recommended)
+const source1 = new CanvasSource(canvas, {
+  codec: 'avc',
+  bitrate: QUALITY_HIGH, // Automatically scales with resolution
+});
+
+// Manual bitrate
+const source2 = new CanvasSource(canvas, {
+  codec: 'avc',
+  bitrate: 5e6, // 5 Mbps
+});
+```
+
+**Rough bitrate guidelines (AVC, 30fps):**
+- 480p: 1-2 Mbps
+- 720p: 2-5 Mbps
+- 1080p: 5-10 Mbps
+- 4K: 15-30 Mbps
+
+### Adjust key frame interval
+
+Shorter intervals improve seeking but increase size:
+
+```typescript
+const source = new VideoSampleSource({
+  codec: 'vp9',
+  bitrate: QUALITY_HIGH,
+  keyFrameInterval: 2, // Key frame every 2 seconds (default: 5)
+});
+```
+
+**Trade-offs:**
+- Shorter interval: Better seeking, larger file size
+- Longer interval: Worse seeking, smaller file size
+
+<Note>
+When using multiple video tracks, use the same `keyFrameInterval` for all tracks to ensure aligned key frames.
+</Note>
+
+### Optimize for real-time
+
+For real-time encoding (screen recording, webcam):
+
+```typescript
+const source = new MediaStreamVideoTrackSource(track, {
+  codec: 'vp8',
+  bitrate: 2e6,
+  latencyMode: 'realtime', // Automatically set for MediaStream sources
+  bitrateMode: 'variable',  // Better for varying content
+});
+```
+
+### Batch audio samples
+
+When using `AudioSampleSource`, batch small samples when possible:
+
+```typescript
+// Less efficient - many small samples
+for (const smallSample of smallSamples) {
+  await audioSource.add(smallSample);
+}
+
+// More efficient - combine into larger samples
+const largeSample = combineAudioSamples(smallSamples);
+await audioSource.add(largeSample);
+```
+
+## Reading optimization
+
+### Use metadata-only packets
+
+When you only need packet metadata:
+
+```typescript
+const sink = new EncodedPacketSink(track);
+
+// Only loads metadata, not packet data
+const packet = await sink.getPacket(5.0, { metadataOnly: true });
+
+console.log(packet.timestamp); // Available
+console.log(packet.type);      // Available
+console.log(packet.data);      // Empty (not loaded)
+```
+
+**Benefits:**
+- Faster retrieval
+- Lower memory usage
+- Reduced I/O
+
+### Use sparse sampling efficiently
+
+For non-sequential frame access, use `samplesAtTimestamps`:
+
+```typescript
+// Inefficient - decodes packets multiple times
+const frame1 = await sink.getSample(1.0);
+const frame2 = await sink.getSample(2.0);
+const frame3 = await sink.getSample(3.0);
+
+// Efficient - optimized decode pipeline
+for await (const sample of sink.samplesAtTimestamps([1.0, 2.0, 3.0])) {
+  // Process sample
+  sample?.close();
+}
+```
+
+### Exit iterations early
+
+Use `break` to exit early and clean up resources:
+
+```typescript
+let count = 0;
+for await (const sample of sink.samples()) {
+  sample.close();
+  
+  if (++count >= 10) {
+    break; // Automatically stops decoder and cleans up
+  }
+}
+```
+
+### Skip decoding when possible
+
+If you don't need decoded data, use `EncodedPacketSink`:
+
+```typescript
+// Skip decoding entirely
+const packetSink = new EncodedPacketSink(track);
+
+for await (const packet of packetSink.packets()) {
+  console.log(packet.timestamp, packet.duration, packet.type);
+  // No decoding overhead
+}
+```
+
+## Bundle size optimization
+
+### Import only what you need
+
+```typescript
+// ❌ Bad - imports everything
+import * as Mediabunny from 'mediabunny';
+
+// ✅ Good - imports only what's needed
+import {
+  Input,
+  Output,
+  Mp4InputFormat,
+  Mp4OutputFormat,
+  BlobSource,
+  BufferTarget,
+} from 'mediabunny';
+```
+
+### Use format-specific imports
+
+```typescript
+// Only need MP4
+import { Input, Mp4InputFormat } from 'mediabunny';
+
+const input = new Input({
+  source: new BlobSource(file),
+  formats: [new Mp4InputFormat()], // Only MP4 code included
+});
+```
+
+### Lazy-load less common formats
+
+For formats used rarely, consider dynamic imports:
+
+```typescript
+async function openFile(file: File) {
+  const ext = file.name.split('.').pop();
+  
+  let format;
+  if (ext === 'mp4' || ext === 'mov') {
+    const { Mp4InputFormat } = await import('mediabunny');
+    format = new Mp4InputFormat();
+  } else if (ext === 'webm' || ext === 'mkv') {
+    const { WebMInputFormat } = await import('mediabunny');
+    format = new WebMInputFormat();
+  }
+  
+  return new Input({
+    source: new BlobSource(file),
+    formats: [format],
+  });
+}
+```
+
+## Performance monitoring
+
+### Track encoding progress
+
+```typescript
+let encodedPackets = 0;
+let totalBytes = 0;
+
+const source = new VideoSampleSource({
+  codec: 'avc',
+  bitrate: QUALITY_HIGH,
+  onEncodedPacket: (packet, meta) => {
+    encodedPackets++;
+    totalBytes += packet.byteLength;
+    console.log(`Encoded ${encodedPackets} packets, ${totalBytes} bytes`);
+  },
+});
+```
+
+### Monitor output progress
+
+```typescript
+const output = new Output({
+  format: new Mp4OutputFormat(),
+  target: new StreamTarget({
+    onProgress: (bytesWritten) => {
+      console.log(`Written ${bytesWritten} bytes`);
+    },
+  }),
+});
+```
+
+### Measure decode performance
+
+```typescript
+const startTime = performance.now();
+let frameCount = 0;
+
+for await (const sample of sink.samples()) {
+  frameCount++;
+  sample.close();
+}
+
+const elapsed = performance.now() - startTime;
+const fps = frameCount / (elapsed / 1000);
+console.log(`Decoded ${frameCount} frames in ${elapsed}ms (${fps.toFixed(2)} fps)`);
+```
+
+## Common performance pitfalls
+
+<Accordion title="Not awaiting add() calls">
+  **Problem:** Ignoring backpressure causes memory buildup
+  
+  ```typescript
+  // ❌ Wrong
+  for (const frame of frames) {
+    source.add(frame);
+  }
+  
+  // ✅ Correct
+  for (const frame of frames) {
+    await source.add(frame);
+  }
+  ```
+</Accordion>
+
+<Accordion title="Not closing samples">
+  **Problem:** Memory leaks from unclosed VideoFrames/AudioData
+  
+  ```typescript
+  // ❌ Wrong
+  for await (const sample of sink.samples()) {
+    processFrame(sample);
+  }
+  
+  // ✅ Correct
+  for await (const sample of sink.samples()) {
+    processFrame(sample);
+    sample.close();
+  }
+  ```
+</Accordion>
+
+<Accordion title="Using BufferTarget for large files">
+  **Problem:** Entire file kept in memory
+  
+  ```typescript
+  // ❌ Wrong for large files
+  const target = new BufferTarget();
+  
+  // ✅ Better for large files
+  const target = new StreamTarget();
+  ```
+</Accordion>
+
+<Accordion title="Importing ALL_FORMATS when not needed">
+  **Problem:** Unnecessarily large bundle size
+  
+  ```typescript
+  // ❌ Wrong - includes all format code
+  import { ALL_FORMATS } from 'mediabunny';
+  
+  // ✅ Better - only includes what you use
+  import { Mp4InputFormat, WebMInputFormat } from 'mediabunny';
+  const formats = [new Mp4InputFormat(), new WebMInputFormat()];
+  ```
+</Accordion>
+
+<Accordion title="Multiple getSample() calls instead of samplesAtTimestamps()">
+  **Problem:** Inefficient decoding of same packets
+  
+  ```typescript
+  // ❌ Wrong - decodes packets multiple times
+  for (const timestamp of timestamps) {
+    const sample = await sink.getSample(timestamp);
+    process(sample);
+  }
+  
+  // ✅ Better - optimized decode pipeline
+  for await (const sample of sink.samplesAtTimestamps(timestamps)) {
+    process(sample);
+  }
+  ```
+</Accordion>
+
+## Benchmarking tips
+
+<Steps>
+  <Step title="Test with realistic data">
+    Use actual video files and canvas content, not synthetic test patterns.
+  </Step>
+  
+  <Step title="Test on target browsers">
+    Performance varies significantly between browsers and platforms.
+  </Step>
+  
+  <Step title="Measure end-to-end">
+    Include all operations (reading, decoding, processing, encoding, writing).
+  </Step>
+  
+  <Step title="Monitor memory">
+    Use browser DevTools to check memory usage over time.
+  </Step>
+  
+  <Step title="Test with different codecs">
+    Some codecs are faster than others on specific hardware.
+  </Step>
+</Steps>
+
+## See also
+
+- [Media sources](/advanced/media-sources) - Efficient data input
+- [Media sinks](/advanced/media-sinks) - Efficient data output
+- [Writing media files](/guide/writing-media-files) - Output best practices
+- [Reading media files](/guide/reading-media-files) - Input best practices

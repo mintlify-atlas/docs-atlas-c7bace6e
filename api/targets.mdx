@@ -1,0 +1,191 @@
+---
+title: Targets
+description: Target classes for writing output data to various destinations
+---
+
+## Target
+
+The base class for targets, specifying where output files are written.
+
+### Properties
+
+<ResponseField name="onwrite" type="((start: number, end: number) => unknown) | null">
+  Called each time data is written to the target. Will be called with the byte range into which data was written.
+  
+  <Note>
+    This callback is extremely chatty and gets called very frequently. Use it to track the size of the output file as it grows.
+  </Note>
+</ResponseField>
+
+---
+
+## BufferTarget
+
+A target that writes data directly into an ArrayBuffer in memory. Great for performance, but not suitable for very large files. The buffer will be available once the output has been finalized.
+
+### Constructor
+
+```typescript
+new BufferTarget()
+```
+
+No parameters required.
+
+### Properties
+
+<ResponseField name="buffer" type="ArrayBuffer | null">
+  Stores the final output buffer. Until the output is finalized, this will be `null`.
+</ResponseField>
+
+### Example
+
+```typescript
+const target = new BufferTarget();
+const output = new Output(target);
+
+// ... write data to the output
+
+await output.finalize();
+
+const arrayBuffer = target.buffer; // Access the final buffer
+```
+
+---
+
+## StreamTarget
+
+This target writes data to a [`WritableStream`](https://developer.mozilla.org/en-US/docs/Web/API/WritableStream), making it a general-purpose target for writing data anywhere. It is also compatible with [`FileSystemWritableFileStream`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemWritableFileStream) for use with the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_API). The `WritableStream` can also apply backpressure, which will propagate to the output and throttle the encoders.
+
+### Constructor
+
+```typescript
+new StreamTarget(writable: WritableStream<StreamTargetChunk>, options?: StreamTargetOptions)
+```
+
+<ParamField path="writable" type="WritableStream<StreamTargetChunk>" required>
+  The writable stream to write data to.
+</ParamField>
+
+<ParamField path="options" type="StreamTargetOptions">
+  Optional configuration.
+</ParamField>
+
+### Options
+
+<ParamField path="options.chunked" type="boolean" default="false">
+  When set to true, data created by the output will first be accumulated and only written out once it has reached sufficient size, using a default chunk size of 16 MiB. This is useful for reducing the total amount of writes, at the cost of latency.
+</ParamField>
+
+<ParamField path="options.chunkSize" type="number" default="16777216">
+  When using `chunked: true`, this specifies the maximum size of each chunk. Defaults to 16 MiB.
+</ParamField>
+
+### StreamTargetChunk type
+
+<ResponseField name="type" type="'write'" required>
+  The operation type. Always `'write'`. This ensures automatic compatibility with FileSystemWritableFileStream.
+</ResponseField>
+
+<ResponseField name="data" type="Uint8Array<ArrayBuffer>" required>
+  The data to write.
+</ResponseField>
+
+<ResponseField name="position" type="number" required>
+  The byte offset in the output file at which to write the data.
+</ResponseField>
+
+### Example
+
+```typescript
+const writable = new WritableStream({
+  write(chunk) {
+    console.log(`Writing ${chunk.data.length} bytes at position ${chunk.position}`);
+  }
+});
+
+const target = new StreamTarget(writable, {
+  chunked: true,
+  chunkSize: 8 * 1024 * 1024 // 8 MiB chunks
+});
+```
+
+---
+
+## FilePathTarget
+
+A target that writes to a file at the specified path. Intended for server-side usage in Node, Bun, or Deno.
+
+<Note>
+  Writing is chunked by default. The internally held file handle will be closed when `.finalize()` or `.cancel()` are called on the corresponding `Output`.
+</Note>
+
+### Constructor
+
+```typescript
+new FilePathTarget(filePath: string, options?: FilePathTargetOptions)
+```
+
+<ParamField path="filePath" type="string" required>
+  The path to the file to write to.
+</ParamField>
+
+<ParamField path="options" type="FilePathTargetOptions">
+  Optional configuration. Same as `StreamTargetOptions`.
+</ParamField>
+
+### Options
+
+<ParamField path="options.chunked" type="boolean" default="true">
+  When set to true, data created by the output will first be accumulated and only written out once it has reached sufficient size. Defaults to true for FilePathTarget.
+</ParamField>
+
+<ParamField path="options.chunkSize" type="number" default="16777216">
+  The maximum size of each chunk. Defaults to 16 MiB.
+</ParamField>
+
+### Example
+
+```typescript
+const target = new FilePathTarget('./output.mp4', {
+  chunked: true,
+  chunkSize: 32 * 1024 * 1024 // 32 MiB chunks
+});
+
+const output = new Output(target);
+
+// ... write data to the output
+
+await output.finalize(); // File handle is closed automatically
+```
+
+---
+
+## NullTarget
+
+This target just discards all incoming data. It is useful for when you need an `Output` but extract data from it differently, for example through format-specific callbacks (`onMoof`, `onMdat`, ...) or encoder events.
+
+### Constructor
+
+```typescript
+new NullTarget()
+```
+
+No parameters required.
+
+### Example
+
+```typescript
+const target = new NullTarget();
+const output = new Output(target);
+
+// Use format-specific callbacks instead of writing to a file
+const muxer = new MP4Muxer({
+  target,
+  onMoof: (data, offset) => {
+    // Handle moof box data
+  },
+  onMdat: (data, offset) => {
+    // Handle mdat box data
+  }
+});
+```

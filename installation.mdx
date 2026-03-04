@@ -1,0 +1,151 @@
+---
+title: Installation
+description: Install Mediabunny using npm, yarn, pnpm, or include it directly with a script tag
+---
+
+Install Mediabunny using your favorite package manager:
+
+<CodeGroup>
+```bash npm
+npm install mediabunny
+```
+
+```bash yarn
+yarn add mediabunny
+```
+
+```bash pnpm
+pnpm add mediabunny
+```
+
+```bash bun
+bun add mediabunny
+```
+</CodeGroup>
+
+## Requirements
+
+### JavaScript environment
+
+<Info>
+Mediabunny requires any JavaScript environment that can run **ECMAScript 2021** or later. It's designed to run in modern browsers.
+</Info>
+
+### TypeScript
+
+For TypeScript projects, you'll need **TypeScript 5.7 or later** for type definitions.
+
+### Browser compatibility
+
+Mediabunny works in modern browsers that support:
+- ECMAScript 2021 features
+- WebCodecs API (for encoding/decoding)
+- Modern JavaScript APIs (Promises, async/await, etc.)
+
+Supported browsers include:
+- Chrome 94+
+- Edge 94+
+- Safari 16.4+
+- Firefox (with WebCodecs behind a flag)
+
+<Warning>
+Some features like hardware-accelerated encoding and decoding require WebCodecs API support. Check [browser compatibility](https://caniuse.com/webcodecs) for your target browsers.
+</Warning>
+
+### Node.js support
+
+Mediabunny also works in Node.js environments. However, WebCodecs API features may require polyfills or may not be available depending on your Node.js version.
+
+## Import the library
+
+Once installed, import Mediabunny in your project:
+
+<CodeGroup>
+```typescript ESM (recommended)
+import { Input, Output, Conversion, ALL_FORMATS } from 'mediabunny';
+```
+
+```javascript CommonJS
+const { Input, Output, Conversion, ALL_FORMATS } = require('mediabunny');
+```
+</CodeGroup>
+
+<Tip>
+ESM imports are preferred because they enable tree shaking, which significantly reduces your bundle size.
+</Tip>
+
+## Using a script tag
+
+You can also include Mediabunny directly in your HTML using a script tag:
+
+```html
+<script src="mediabunny.cjs"></script>
+```
+
+This will add a `Mediabunny` object to the global scope, giving you access to all exports:
+
+```javascript
+const input = new Mediabunny.Input({
+  source: new Mediabunny.BlobSource(file),
+  formats: Mediabunny.ALL_FORMATS,
+});
+```
+
+### Download distribution files
+
+You can download built distribution files from the [releases page](https://github.com/Vanilagy/mediabunny/releases).
+
+<Tabs>
+  <Tab title="Standard script tag">
+    Use the `*.cjs` builds for normal script tag inclusion:
+    
+    ```html
+    <script src="mediabunny.cjs"></script>
+    ```
+  </Tab>
+  
+  <Tab title="ES modules">
+    Use the `*.mjs` builds for script tags with `type="module"` or direct imports via ESM:
+    
+    ```html
+    <script type="module">
+      import { Input } from './mediabunny.mjs';
+    </script>
+    ```
+  </Tab>
+</Tabs>
+
+### TypeScript types for global usage
+
+If you're using TypeScript with the script tag approach, include the `mediabunny.d.ts` declaration file in your project. This will declare a global `Mediabunny` namespace with full type support.
+
+## Bundle size
+
+One of Mediabunny's key advantages is its tree-shakable architecture:
+
+- **Minimum size**: 5 kB gzipped (when using only specific features)
+- **Full library**: Varies based on which formats and codecs you use
+- **Smart bundling**: Only the formats and codecs you import are included
+
+<Tip>
+Because Mediabunny is extremely tree-shakable, you only pay for what you use. If you only need an MP4 muxer, your bundle will be very small.
+</Tip>
+
+## Next steps
+
+Now that you have Mediabunny installed, you're ready to start building:
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Jump right in with code examples for common tasks
+  </Card>
+  <Card title="Read media files" icon="book-open" href="/guide/reading-media-files">
+    Learn how to extract metadata and media data
+  </Card>
+  <Card title="Write media files" icon="pen" href="/guide/writing-media-files">
+    Create new media files from scratch
+  </Card>
+  <Card title="Convert files" icon="arrows-rotate" href="/guide/converting-media-files">
+    Convert between different media formats
+  </Card>
+</CardGroup>

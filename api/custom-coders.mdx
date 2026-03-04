@@ -1,0 +1,393 @@
+---
+title: Custom coders
+description: Implement custom video and audio encoders and decoders
+---
+
+## Overview
+
+Mediabunny allows you to implement custom video and audio encoders and decoders that integrate seamlessly with the library's encoding and decoding pipeline. This is useful when you need to support codecs not natively available in the browser or want to use alternative implementations.
+
+## Custom decoders
+
+### CustomVideoDecoder
+
+Base class for custom video decoders.
+
+```typescript
+abstract class CustomVideoDecoder {
+  readonly codec: VideoCodec;
+  readonly config: VideoDecoderConfig;
+  readonly onSample: (sample: VideoSample) => unknown;
+  
+  static supports(codec: VideoCodec, config: VideoDecoderConfig): boolean;
+  abstract init(): MaybePromise<void>;
+  abstract decode(packet: EncodedPacket): MaybePromise<void>;
+  abstract flush(): MaybePromise<void>;
+  abstract close(): MaybePromise<void>;
+}
+```
+
+**Properties:**
+
+<ParamField path="codec" type="VideoCodec">
+  The input video's codec.
+</ParamField>
+
+<ParamField path="config" type="VideoDecoderConfig">
+  The input video's decoder config.
+</ParamField>
+
+<ParamField path="onSample" type="(sample: VideoSample) => unknown">
+  The callback to call when a decoded VideoSample is available.
+</ParamField>
+
+**Methods:**
+
+<ParamField path="static supports" type="(codec: VideoCodec, config: VideoDecoderConfig) => boolean">
+  Returns `true` if and only if the decoder can decode the given codec configuration.
+</ParamField>
+
+<ParamField path="init" type="() => MaybePromise<void>">
+  Called after decoder creation; can be used for custom initialization logic.
+</ParamField>
+
+<ParamField path="decode" type="(packet: EncodedPacket) => MaybePromise<void>">
+  Decodes the provided encoded packet.
+</ParamField>
+
+<ParamField path="flush" type="() => MaybePromise<void>">
+  Decodes all remaining packets and then resolves.
+</ParamField>
+
+<ParamField path="close" type="() => MaybePromise<void>">
+  Called when the decoder is no longer needed and its resources can be freed.
+</ParamField>
+
+**Source:** custom-coder.ts:20
+
+### CustomAudioDecoder
+
+Base class for custom audio decoders.
+
+```typescript
+abstract class CustomAudioDecoder {
+  readonly codec: AudioCodec;
+  readonly config: AudioDecoderConfig;
+  readonly onSample: (sample: AudioSample) => unknown;
+  
+  static supports(codec: AudioCodec, config: AudioDecoderConfig): boolean;
+  abstract init(): MaybePromise<void>;
+  abstract decode(packet: EncodedPacket): MaybePromise<void>;
+  abstract flush(): MaybePromise<void>;
+  abstract close(): MaybePromise<void>;
+}
+```
+
+**Properties:**
+
+<ParamField path="codec" type="AudioCodec">
+  The input audio's codec.
+</ParamField>
+
+<ParamField path="config" type="AudioDecoderConfig">
+  The input audio's decoder config.
+</ParamField>
+
+<ParamField path="onSample" type="(sample: AudioSample) => unknown">
+  The callback to call when a decoded AudioSample is available.
+</ParamField>
+
+**Methods:**
+
+<ParamField path="static supports" type="(codec: AudioCodec, config: AudioDecoderConfig) => boolean">
+  Returns `true` if and only if the decoder can decode the given codec configuration.
+</ParamField>
+
+<ParamField path="init" type="() => MaybePromise<void>">
+  Called after decoder creation; can be used for custom initialization logic.
+</ParamField>
+
+<ParamField path="decode" type="(packet: EncodedPacket) => MaybePromise<void>">
+  Decodes the provided encoded packet.
+</ParamField>
+
+<ParamField path="flush" type="() => MaybePromise<void>">
+  Decodes all remaining packets and then resolves.
+</ParamField>
+
+<ParamField path="close" type="() => MaybePromise<void>">
+  Called when the decoder is no longer needed and its resources can be freed.
+</ParamField>
+
+**Source:** custom-coder.ts:50
+
+## Custom encoders
+
+### CustomVideoEncoder
+
+Base class for custom video encoders.
+
+```typescript
+abstract class CustomVideoEncoder {
+  readonly codec: VideoCodec;
+  readonly config: VideoEncoderConfig;
+  readonly onPacket: (packet: EncodedPacket, meta?: EncodedVideoChunkMetadata) => unknown;
+  
+  static supports(codec: VideoCodec, config: VideoEncoderConfig): boolean;
+  abstract init(): MaybePromise<void>;
+  abstract encode(videoSample: VideoSample, options: VideoEncoderEncodeOptions): MaybePromise<void>;
+  abstract flush(): MaybePromise<void>;
+  abstract close(): MaybePromise<void>;
+}
+```
+
+**Properties:**
+
+<ParamField path="codec" type="VideoCodec">
+  The codec with which to encode the video.
+</ParamField>
+
+<ParamField path="config" type="VideoEncoderConfig">
+  Config for the encoder.
+</ParamField>
+
+<ParamField path="onPacket" type="(packet: EncodedPacket, meta?: EncodedVideoChunkMetadata) => unknown">
+  The callback to call when an EncodedPacket is available.
+</ParamField>
+
+**Methods:**
+
+<ParamField path="static supports" type="(codec: VideoCodec, config: VideoEncoderConfig) => boolean">
+  Returns `true` if and only if the encoder can encode the given codec configuration.
+</ParamField>
+
+<ParamField path="init" type="() => MaybePromise<void>">
+  Called after encoder creation; can be used for custom initialization logic.
+</ParamField>
+
+<ParamField path="encode" type="(videoSample: VideoSample, options: VideoEncoderEncodeOptions) => MaybePromise<void>">
+  Encodes the provided video sample.
+</ParamField>
+
+<ParamField path="flush" type="() => MaybePromise<void>">
+  Encodes all remaining video samples and then resolves.
+</ParamField>
+
+<ParamField path="close" type="() => MaybePromise<void>">
+  Called when the encoder is no longer needed and its resources can be freed.
+</ParamField>
+
+**Source:** custom-coder.ts:80
+
+### CustomAudioEncoder
+
+Base class for custom audio encoders.
+
+```typescript
+abstract class CustomAudioEncoder {
+  readonly codec: AudioCodec;
+  readonly config: AudioEncoderConfig;
+  readonly onPacket: (packet: EncodedPacket, meta?: EncodedAudioChunkMetadata) => unknown;
+  
+  static supports(codec: AudioCodec, config: AudioEncoderConfig): boolean;
+  abstract init(): MaybePromise<void>;
+  abstract encode(audioSample: AudioSample): MaybePromise<void>;
+  abstract flush(): MaybePromise<void>;
+  abstract close(): MaybePromise<void>;
+}
+```
+
+**Properties:**
+
+<ParamField path="codec" type="AudioCodec">
+  The codec with which to encode the audio.
+</ParamField>
+
+<ParamField path="config" type="AudioEncoderConfig">
+  Config for the encoder.
+</ParamField>
+
+<ParamField path="onPacket" type="(packet: EncodedPacket, meta?: EncodedAudioChunkMetadata) => unknown">
+  The callback to call when an EncodedPacket is available.
+</ParamField>
+
+**Methods:**
+
+<ParamField path="static supports" type="(codec: AudioCodec, config: AudioEncoderConfig) => boolean">
+  Returns `true` if and only if the encoder can encode the given codec configuration.
+</ParamField>
+
+<ParamField path="init" type="() => MaybePromise<void>">
+  Called after encoder creation; can be used for custom initialization logic.
+</ParamField>
+
+<ParamField path="encode" type="(audioSample: AudioSample) => MaybePromise<void>">
+  Encodes the provided audio sample.
+</ParamField>
+
+<ParamField path="flush" type="() => MaybePromise<void>">
+  Encodes all remaining audio samples and then resolves.
+</ParamField>
+
+<ParamField path="close" type="() => MaybePromise<void>">
+  Called when the encoder is no longer needed and its resources can be freed.
+</ParamField>
+
+**Source:** custom-coder.ts:110
+
+## Registration functions
+
+### registerDecoder
+
+Registers a custom video or audio decoder. Registered decoders will automatically be used for decoding whenever possible.
+
+```typescript
+function registerDecoder(
+  decoder: typeof CustomVideoDecoder | typeof CustomAudioDecoder
+): void
+```
+
+<ParamField path="decoder" type="typeof CustomVideoDecoder | typeof CustomAudioDecoder" required>
+  The custom decoder class to register.
+</ParamField>
+
+**Source:** custom-coder.ts:145
+
+### registerEncoder
+
+Registers a custom video or audio encoder. Registered encoders will automatically be used for encoding whenever possible.
+
+```typescript
+function registerEncoder(
+  encoder: typeof CustomVideoEncoder | typeof CustomAudioEncoder
+): void
+```
+
+<ParamField path="encoder" type="typeof CustomVideoEncoder | typeof CustomAudioEncoder" required>
+  The custom encoder class to register.
+</ParamField>
+
+**Source:** custom-coder.ts:175
+
+## Usage examples
+
+### Implementing a custom video decoder
+
+```typescript
+import { CustomVideoDecoder, registerDecoder, type VideoCodec } from 'mediabunny';
+
+class MyCustomH264Decoder extends CustomVideoDecoder {
+  static supports(codec: VideoCodec, config: VideoDecoderConfig): boolean {
+    // Only support H.264/AVC
+    return codec === 'avc';
+  }
+  
+  async init(): Promise<void> {
+    // Initialize your decoder (e.g., load WASM module)
+    console.log('Initializing custom H.264 decoder');
+  }
+  
+  async decode(packet: EncodedPacket): Promise<void> {
+    // Decode the packet and create a VideoSample
+    const videoSample = await this.decodePacket(packet);
+    
+    // Call the callback with the decoded sample
+    this.onSample(videoSample);
+  }
+  
+  async flush(): Promise<void> {
+    // Flush any buffered frames
+    console.log('Flushing decoder');
+  }
+  
+  async close(): Promise<void> {
+    // Clean up resources
+    console.log('Closing decoder');
+  }
+  
+  private async decodePacket(packet: EncodedPacket): Promise<VideoSample> {
+    // Your custom decoding logic here
+    // Return a VideoSample (VideoFrame)
+  }
+}
+
+// Register the decoder
+registerDecoder(MyCustomH264Decoder);
+```
+
+### Implementing a custom audio encoder
+
+```typescript
+import { CustomAudioEncoder, registerEncoder, type AudioCodec } from 'mediabunny';
+
+class MyCustomOpusEncoder extends CustomAudioEncoder {
+  private encoder: any; // Your encoder instance
+  
+  static supports(codec: AudioCodec, config: AudioEncoderConfig): boolean {
+    // Only support Opus
+    return codec === 'opus';
+  }
+  
+  async init(): Promise<void> {
+    // Initialize your encoder
+    this.encoder = await loadOpusEncoder(this.config);
+  }
+  
+  async encode(audioSample: AudioSample): Promise<void> {
+    // Encode the audio sample
+    const encodedData = await this.encoder.encode(audioSample);
+    
+    // Create an EncodedPacket and call the callback
+    const packet = new EncodedPacket({
+      type: 'audio',
+      data: encodedData,
+      timestamp: audioSample.timestamp,
+      duration: audioSample.duration,
+      keyframe: false
+    });
+    
+    this.onPacket(packet);
+  }
+  
+  async flush(): Promise<void> {
+    // Flush any buffered audio
+    const remaining = await this.encoder.flush();
+    if (remaining) {
+      this.onPacket(remaining);
+    }
+  }
+  
+  async close(): Promise<void> {
+    // Clean up
+    this.encoder.close();
+  }
+}
+
+// Register the encoder
+registerEncoder(MyCustomOpusEncoder);
+```
+
+### Using registered custom coders
+
+```typescript
+import { Muxer } from 'mediabunny';
+
+// After registering your custom coders, they'll be used automatically
+const muxer = new Muxer({
+  target: new ArrayBufferTarget(),
+  video: {
+    codec: 'avc', // Will use MyCustomH264Decoder if available
+    width: 1920,
+    height: 1080
+  },
+  audio: {
+    codec: 'opus', // Will use MyCustomOpusEncoder if available
+    sampleRate: 48000,
+    numberOfChannels: 2
+  }
+});
+```
+
+<Note>
+  Custom coders are checked before native browser encoders/decoders. If your custom coder's `supports()` method returns `true`, it will be used instead of the native implementation.
+</Note>
